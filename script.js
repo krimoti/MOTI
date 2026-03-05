@@ -1660,13 +1660,7 @@ function getHeatColor(intensity) {
 
 // ============================================================
 // ============================================================
-function previewSystemName(val) {
-  const name = val.trim() || 'Dazura';
-  document.querySelectorAll('.topnav-title, .login-title, .sp-title, .ms-hero-company, .ms-btn-title').forEach(el => {
-    if (el) el.textContent = name;
-  });
-  document.title = name;
-}
+
 
 function previewCompanyName(val) {
   // Live preview in header as user types
@@ -1748,15 +1742,7 @@ function loadCompanySettings() {
 function applyBranding(s) {
   if(!s) s = getSettings();
 
-  // System name — update all occurrences
-  const sysName = (s.systemName && s.systemName.trim()) ? s.systemName.trim() : 'Dazura';
-  document.querySelectorAll('.topnav-title, .login-title, .sp-title, .ms-hero-company, .ms-btn-title').forEach(el => {
-    if (el) el.textContent = sysName;
-  });
-  // Update page title
-  document.title = sysName;
-
-  // Company name — show under system name
+  // Company name — show under branding
   const nameEl = document.getElementById('companyNameDisplay');
   if(nameEl) {
     if(s.companyName && s.companyName !== 'החברה שלי') {
