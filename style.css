@@ -2286,3 +2286,22 @@ select {
   color: rgba(180,210,255,0.5);
   letter-spacing: 0.5px;
 }
+
+/* ══ SETTINGS TEXT VISIBILITY FIX ══ */
+.admin-section,
+.admin-section label,
+.admin-section .form-label,
+.admin-section p,
+.admin-section div:not([class*="btn"]) {
+  color: var(--text-primary) !important;
+}
+.admin-section .section-title {
+  color: var(--text-primary) !important;
+  font-weight: 700;
+}
+.admin-section input,
+.admin-section select,
+.admin-section textarea {
+  color: var(--text-primary) !important;
+  background: var(--surface) !important;
+}
