@@ -342,10 +342,9 @@ const AIContext = {
 // ============================================================
 const AIEngine = {
   getStoredData() {
-    try { return JSON.parse(localStorage.getItem('vacSystem_v3')) || {}; }
-    catch(e) { return {}; }
-  },
-
+  try { return (typeof getDB === 'function') ? getDB() : JSON.parse(localStorage.getItem('vacSystem_v3')) || {}; }
+  catch(e) { return {}; }
+},
   ask(question, cu) {
     const db  = this.getStoredData();
     const raw = (question||'').trim();
