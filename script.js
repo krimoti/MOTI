@@ -632,6 +632,60 @@ function doLogin() {
 
   document.getElementById('loginScreen').classList.remove('active');
   showModuleSelector();
+  // After password login: offer biometric setup if not yet registered
+  setTimeout(offerBiometricSetup, 1000);
+}
+
+async function offerBiometricSetup() {
+  if (!window.PublicKeyCredential) return;
+  if (localStorage.getItem('dazura_biometric_user')) return; // already registered
+  try {
+    const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!ok) return;
+  } catch(e) { return; }
+
+  const toast = document.createElement('div');
+  toast.id = 'biometricToast';
+  toast.setAttribute('dir', 'rtl');
+  toast.style.cssText = [
+    'position:fixed', 'bottom:100px', 'left:50%', 'transform:translateX(-50%)',
+    'z-index:99999', 'width:calc(100% - 40px)', 'max-width:340px',
+    'background:rgba(5,15,50,0.97)', 'border:1px solid rgba(0,150,255,0.4)',
+    'border-radius:18px', 'padding:16px 18px',
+    'backdrop-filter:blur(20px)', '-webkit-backdrop-filter:blur(20px)',
+    'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
+    'font-family:Heebo,sans-serif'
+  ].join(';');
+  toast.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
+      '<span style="font-size:26px;">🫆</span>' +
+      '<div><div style="font-size:14px;font-weight:800;color:#fff;">הפעל כניסה ביומטרית?</div>' +
+      '<div style="font-size:11px;color:rgba(160,200,255,0.7);margin-top:2px;">טביעת אצבע / זיהוי פנים — פעם אחת</div></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+      '<button id="biometricSkip" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:10px;font-size:13px;color:rgba(255,255,255,0.6);cursor:pointer;font-family:Heebo,sans-serif;">לא עכשיו</button>' +
+      '<button id="biometricActivate" style="flex:2;background:linear-gradient(135deg,#0050ff,#0099ff);border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:Heebo,sans-serif;">✅ הפעל ביומטריה</button>' +
+    '</div>';
+  document.body.appendChild(toast);
+
+  document.getElementById('biometricSkip').onclick = () => toast.remove();
+  document.getElementById('biometricActivate').onclick = async () => {
+    toast.remove();
+    try {
+      await registerBiometric();
+      // Show success
+      const ok = document.createElement('div');
+      ok.setAttribute('dir','rtl');
+      ok.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(5,80,30,0.95);border:1px solid rgba(0,200,80,0.4);border-radius:14px;padding:14px 20px;font-family:Heebo,sans-serif;font-size:13px;font-weight:700;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+      ok.textContent = '✅ ביומטריה הופעלה! בפעם הבאה תוכל להיכנס ישירות';
+      document.body.appendChild(ok);
+      setTimeout(() => ok.remove(), 3500);
+    } catch(err) {
+      console.warn('Biometric registration failed:', err);
+    }
+  };
+  // Auto-dismiss after 15s
+  setTimeout(() => { if (document.getElementById('biometricToast')) toast.remove(); }, 15000);
 }
 
 function doLogout() {
@@ -3521,6 +3575,15 @@ function isCeoUser() {
   return currentUser && currentUser.username === CEO_USERNAME;
 }
 
+
+function enterCeoTimeclock() {
+  document.getElementById('ceoDashboardScreen').classList.remove('active');
+  enterModule('timeclock');
+}
+function enterCeoVacation() {
+  document.getElementById('ceoDashboardScreen').classList.remove('active');
+  enterModule('vacation');
+}
 function showCeoDashboard() {
   ['loginScreen','appScreen','timeClockScreen','moduleSelectorScreen','forcePasswordScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
@@ -3543,123 +3606,49 @@ function exitCeoDashboard() {
 function populateCeoDashboard() {
   const db    = getDB();
   const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
   const days  = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const months= ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-
-  // Greeting
   const h = today.getHours();
   const greeting = h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : 'ערב טוב';
-  document.getElementById('ceoGreeting').textContent = `${greeting}, ${currentUser.fullName} ☀️`;
-  document.getElementById('ceoDate').textContent = `יום ${days[today.getDay()]}, ${today.getDate()} ב${months[today.getMonth()]} ${today.getFullYear()}`;
 
-  // ===== CARD 1: TODAY =====
-  const todayStr  = today.toISOString().split('T')[0];
-  let offCount=0, wfhCount=0, todayBdays=[];
-  const allUsers  = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
+  // New UI elements
+  const s = getSettings();
+  const cnEl = document.getElementById('ceoCompanyName');
+  if (cnEl) cnEl.textContent = (s.companyName && s.companyName !== 'החברה שלי') ? s.companyName : 'Dazura';
+  const dlEl = document.getElementById('ceoDateLine');
+  if (dlEl) dlEl.textContent = 'יום ' + days[today.getDay()] + ' · ' + today.getDate() + ' ' + months[today.getMonth()] + ' ' + today.getFullYear();
+  const wtEl = document.getElementById('ceoWelcomeText');
+  if (wtEl) wtEl.innerHTML = '👋 ' + greeting + ', <span style="background:linear-gradient(135deg,#fff,#80ccff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">' + currentUser.fullName + '</span>';
+
+  // Stats row
+  const allUsers = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
+  let offCount = 0, wfhCount = 0;
   allUsers.forEach(u => {
     const vacs = getVacations(u.username);
     const type = vacs[todayStr];
     if (type === 'full' || type === 'half') offCount++;
     if (type === 'wfh') wfhCount++;
-    if (u.birthday) {
-      const parts = u.birthday.split('-');
-      if (parts.length===3) {
-        const mm = String(today.getMonth()+1).padStart(2,'0');
-        const dd = String(today.getDate()).padStart(2,'0');
-        if (`${parts[1]}-${parts[2]}` === `${mm}-${dd}`) todayBdays.push(u.fullName);
-      }
-    }
   });
-  const pendingCount = (db.approvalRequests||[]).filter(r=>r.status==='pending').length;
-  let todayText = `👤 ${allUsers.length} עובדים פעילים\n🏖️ ${offCount} בחופשה היום • 🏠 ${wfhCount} מהבית`;
-  if (todayBdays.length) todayText += `\n🎂 יום הולדת: ${todayBdays.join(' + ')}`;
-  if (pendingCount) todayText += `\n⏳ ${pendingCount} בקשות ממתינות לאישור`;
-  document.getElementById('ceoTodayText').style.whiteSpace = 'pre-line';
-  document.getElementById('ceoTodayText').textContent = todayText;
-  // Update pending button
-  document.getElementById('ceoPendingBtn').textContent = `⏳ בקשות ממתינות (${pendingCount})`;
-
-  // Announcement ack summary in today card
-  const latestAnn = (db.announcements||[])[0];
-  if (latestAnn && latestAnn.acks) {
-    const totalEmp = allUsers.length;
-    const ackCount = Object.keys(latestAnn.acks).length;
-    todayText += `\n📢 הודעה אחרונה: ${ackCount}/${totalEmp} אישרו קריאה`;
+  const sickCount    = Object.values(db.sick || {}).filter(s => s.date === todayStr).length;
+  const pendingCount = (db.approvalRequests || []).filter(r => r.status === 'pending').length;
+  const srEl = document.getElementById('ceoStatsRow');
+  if (srEl) {
+    srEl.innerHTML =
+      '<div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">' + sickCount  + '</div><div class="stat-lbl">חולה</div></div>' +
+      '<div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">' + offCount   + '</div><div class="stat-lbl">חופשה</div></div>' +
+      '<div class="ms-stat-pill"><div class="stat-ico">🏠</div><div class="stat-num">' + wfhCount   + '</div><div class="stat-lbl">WFH</div></div>' +
+      '<div class="ms-stat-pill"><div class="stat-ico">⏳</div><div class="stat-num">' + pendingCount + '</div><div class="stat-lbl">ממתין</div></div>';
   }
 
-  document.getElementById('ceoTodayText').textContent = todayText;
-  // Check next 7 days dept load
-  let riskLines = [];
-  const depts = db.departments || [];
-  depts.forEach(dept => {
-    const deptUsers = allUsers.filter(u => {
-      const d = Array.isArray(u.dept) ? u.dept : [u.dept||''];
-      return d.includes(dept);
-    });
-    if (deptUsers.length < 2) return;
-    let busyNext7 = 0;
-    for (let i=0; i<7; i++) {
-      const d = new Date(today); d.setDate(d.getDate()+i);
-      const ds = d.toISOString().split('T')[0];
-      deptUsers.forEach(u => {
-        const t = getVacations(u.username)[ds];
-        if (t === 'full' || t === 'half' || t === 'wfh') busyNext7++;
-      });
-    }
-    const avgPerDay = busyNext7 / 7;
-    const pct = Math.round((avgPerDay / deptUsers.length) * 100);
-    if (pct >= 30) riskLines.push({ dept, pct, size: deptUsers.length });
-  });
-  riskLines.sort((a,b) => b.pct - a.pct);
-  if (riskLines.length) {
-    const top = riskLines[0];
-    document.getElementById('ceoRiskText').style.whiteSpace = 'pre-line';
-    document.getElementById('ceoRiskText').textContent =
-      `⚠️ ${top.dept}: ${top.pct}% מהצוות (${top.size} עובדים) בחופש/WFH שבוע הבא\n💡 המלצה: בדוק פרויקטים קריטיים ושקול דחיית אישורים`
-      + (riskLines.length>1 ? `\n+ ${riskLines.length-1} מחלקות נוספות בסיכון בינוני` : '');
-  } else {
-    document.getElementById('ceoRiskText').textContent = '✅ אין סיכון משמעותי השבוע — הצוות זמין!';
-  }
+  // Legacy hidden elements (JS compat)
+  const legG = document.getElementById('ceoGreeting');
+  if (legG) legG.textContent = greeting + ', ' + currentUser.fullName;
 
-  // ===== CARD 3: COST =====
-  const curMonth = today.getMonth()+1;
-  const curYear  = today.getFullYear();
-  let vacCost = 0, wfhDays = 0, vacDays = 0;
-  allUsers.forEach(u => {
-    const dailySalary = u.dailySalary || 850; // fallback to average
-    const vacs = getVacations(u.username);
-    Object.entries(vacs).forEach(([dt, type]) => {
-      if (!dt.startsWith(`${curYear}-${String(curMonth).padStart(2,'0')}`)) return;
-      if (type === 'full')       { vacDays++; vacCost += dailySalary; }
-      else if (type === 'half')  { vacDays += 0.5; vacCost += dailySalary * 0.5; }
-      else if (type === 'wfh')   { wfhDays++; }
-    });
-  });
-  const wfhSave = Math.round(wfhDays * 850 * 0.3);
-  document.getElementById('ceoCostText').textContent =
-    `📅 חופשות: ${vacDays} ימים — עלות ₪${Math.round(vacCost).toLocaleString()}\n🏠 WFH: ${wfhDays} ימים — חיסכון משוער ₪${wfhSave.toLocaleString()}\n💡 מבוסס על שכר יומי אישי לכל עובד`;
-
-  // ===== CARD 4: BURNOUT =====
-  const ninetyDaysAgo = new Date(today); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate()-90);
-  const burnoutRisk = allUsers.filter(u => {
-    const vacs = getVacations(u.username);
-    const vacLast90 = Object.entries(vacs).filter(([dt]) => new Date(dt) >= ninetyDaysAgo).length;
-    return vacLast90 === 0;
-  });
-  document.getElementById('ceoBurnoutText').style.whiteSpace = 'pre-line';
-  if (burnoutRisk.length) {
-    const names = burnoutRisk.slice(0,3).map(u=>u.fullName).join(', ');
-    document.getElementById('ceoBurnoutText').textContent =
-      `🚨 ${burnoutRisk.length} עובדים ללא חופשה ב-90 יום האחרונים:\n${names}${burnoutRisk.length>3?' ועוד...':''}\n💡 שקול שיחה אישית או חופשה כפויה`;
-  } else {
-    document.getElementById('ceoBurnoutText').textContent = '✅ כל העובדים לקחו חופשה ב-90 הימים האחרונים';
-  }
+  // Init AI chat
+  renderCeoAiMessages();
 }
 
-// ============================================================
-// 🤖 CEO AI CHAT — שאילתות בשפה טבעית + חיסכון עלויות
-// ============================================================
-const ceoAiHistory = [];
 
 function initCeoAiChat() {
   const chatEl = document.getElementById('ceoAiChat');
@@ -3735,6 +3724,55 @@ function buildCeoAiAnswer(q) {
   const vacs = db.vacations || {};
   const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const ql = q.toLowerCase();
+
+  // ---- Role-based access control ----
+  const _isCeoOrAdmin = currentUser && (isCeoUser() || currentUser.role === 'admin' || currentUser.role === 'manager');
+
+  // Financial keywords — CEO/admin only
+  const _finKw = ['עלות','עלויות','חיסכון','שכר','כסף','תקציב','רבעון','שנתי','פיננסי','חיסכון'];
+  if (!_isCeoOrAdmin && _finKw.some(k => ql.includes(k))) {
+    return '🔒 נתונים פיננסיים זמינים למנהלים בלבד.';
+  }
+
+  // Other-employee listing — CEO/admin only (except: conflict check in own dept)
+  const _empKw = ['מי בחופשה','מי חולה','מי עובד','כל העובדים','רשימה','שחיקה','burnout'];
+  const _isConflictCheck = ql.includes('מתנגש') || ql.includes('חופף') || ql.includes('אותה מחלקה') || ql.includes('צוות שלי');
+  if (!_isCeoOrAdmin && !_isConflictCheck && _empKw.some(k => ql.includes(k))) {
+    return '🔒 מידע על עובדים אחרים זמין למנהלים בלבד.\n\nאני יכול לעזור לך לבדוק:\n• האם החופשה שלך מתנגשת עם מישהו מהמחלקה שלך\nנסה: "האם החופשה שלי מתנגשת עם הצוות?"';
+  }
+
+  // Conflict check for any employee (own dept only)
+  if (_isConflictCheck) {
+    if (!currentUser) return 'לא מחובר';
+    const myDept = Array.isArray(currentUser.dept) ? currentUser.dept[0] : (currentUser.dept || '');
+    const myVacs = (vacs[currentUser.username] || {});
+    const myUpcoming = Object.entries(myVacs)
+      .filter(([dt, t]) => dt >= todayStr && (t === 'full' || t === 'half'))
+      .map(([dt]) => dt);
+    if (!myUpcoming.length) return '📅 אין לך ימי חופשה מתוכננים קדימה, אין מה לבדוק.';
+    const deptPeers = allUsers.filter(u => {
+      const d = Array.isArray(u.dept) ? u.dept[0] : (u.dept || '');
+      return d === myDept && u.username !== currentUser.username;
+    });
+    const conflicts = [];
+    myUpcoming.forEach(dt => {
+      deptPeers.forEach(u => {
+        const t = (vacs[u.username] || {})[dt];
+        if (t === 'full' || t === 'half') conflicts.push({ dt, name: u.fullName });
+      });
+    });
+    if (!conflicts.length) {
+      return '✅ אין התנגשויות!\nאף אחד ממחלקת ' + myDept + ' לא מתוכנן לחופשה באותם ימים שלך.';
+    }
+    const grouped = {};
+    conflicts.forEach(c => { if (!grouped[c.dt]) grouped[c.dt] = []; grouped[c.dt].push(c.name); });
+    return '⚠️ התנגשויות במחלקת ' + myDept + ':\n' +
+      Object.entries(grouped).sort().map(([dt, names]) => {
+        const d = new Date(dt + 'T00:00:00');
+        return '• ' + d.getDate() + '/' + (d.getMonth()+1) + ' — ' + names.join(', ');
+      }).join('\n');
+  }
+
 
 
   // ---- זיהוי שאלות מחוץ לתחום ----
@@ -3874,6 +3912,23 @@ function buildCeoAiAnswer(q) {
     return wfhThisWeek.size
       ? `🏠 עובדים שדיווחו על WFH השבוע (${wfhThisWeek.size}):\n${[...wfhThisWeek].join('\n')}`
       : '🏠 אין עובדים שדיווחו על WFH השבוע.';
+  }
+
+  // ---- סטטוס אישי (כל עובד) ----
+  if (ql.includes('שלי') || ql.includes('שלנו') || ql.includes('הסטטוס') || ql.includes('יתרה') || ql.includes('נותרו')) {
+    if (!currentUser) return 'לא מחובר';
+    const myV = vacs[currentUser.username] || {};
+    const todayStatus = myV[todayStr];
+    const statusLabel = todayStatus === 'full' ? '🏖️ בחופשה' : todayStatus === 'half' ? '🌓 חצי יום חופשה' : todayStatus === 'wfh' ? '🏠 עובד מהבית' : todayStatus === 'sick' ? '🤒 מחלה' : '🏢 במשרד';
+    const quota = currentUser.vacationQuota || 14;
+    const used  = Object.values(myV).filter(t => t === 'full').length + Object.values(myV).filter(t => t === 'half').length * 0.5;
+    const remaining = Math.max(0, quota - used);
+    const upcoming = Object.entries(myV).filter(([dt, t]) => dt > todayStr && (t === 'full' || t === 'half')).sort();
+    return '👤 הסטטוס שלך:\n' +
+      '• היום: ' + statusLabel + '\n' +
+      '• מכסה שנתית: ' + quota + ' ימים\n' +
+      '• נוצלו: ' + used + ' | נותרו: ' + remaining + '\n' +
+      (upcoming.length ? '• חופשות מתוכננות: ' + upcoming.slice(0,3).map(([dt]) => { const d=new Date(dt+'T00:00:00'); return d.getDate()+'/'+(d.getMonth()+1); }).join(', ') : '• אין חופשות מתוכננות קדימה');
   }
 
   // ---- Default fallback ----
