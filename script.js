@@ -6617,4 +6617,67 @@ function savePermissionsForUser(username) {
 
 
 
-// Splash handled inline in index.html
+// ============================================================
+// DAZURA SPLASH SCREEN
+// ============================================================
+// ── SPLASH SCREEN ──────────────────────────────────────────
+// Uses DOMContentLoaded (not window.load) so Firebase/network
+// delays never block it. Hard timeout = 2.5s no matter what.
+(function() {
+  var _splashDone = false;
+  function dismissSplash() {
+    if (_splashDone) return;
+    _splashDone = true;
+    var splash = document.getElementById('dazura-splash');
+    if (!splash) return;
+    splash.style.transition = 'opacity 0.5s ease';
+    splash.style.opacity = '0';
+    setTimeout(function() {
+      if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 520);
+  }
+
+  function populateSplash() {
+    try {
+      var raw = localStorage.getItem('vacSystem_v3');
+      if (!raw) return;
+      var db = JSON.parse(raw);
+      var sysName = (db.settings && db.settings.systemName) ? db.settings.systemName.trim() : 'Dazura';
+      var titleEl = document.getElementById('dazuraTitle');
+      if (titleEl) titleEl.textContent = sysName;
+      var company = (db.settings && db.settings.companyName && db.settings.companyName !== 'החברה שלי')
+        ? db.settings.companyName : '';
+      var compEl = document.getElementById('dazuraCompany');
+      if (compEl) compEl.textContent = company;
+      var now = new Date();
+      var todayKey = now.getFullYear() + '-' +
+        String(now.getMonth()+1).padStart(2,'0') + '-' +
+        String(now.getDate()).padStart(2,'0');
+      var vacation=0, wfh=0, sick=0;
+      Object.keys(db.users || {}).forEach(function(u) {
+        var t = ((db.vacations || {})[u] || {})[todayKey];
+        if (t==='full'||t==='half') vacation++;
+        else if (t==='wfh') wfh++;
+        else if (t==='sick') sick++;
+      });
+      var n0=document.getElementById('dazNum0'); if(n0) n0.textContent=vacation;
+      var n1=document.getElementById('dazNum1'); if(n1) n1.textContent=wfh;
+      var n2=document.getElementById('dazNum2'); if(n2) n2.textContent=sick;
+    } catch(e) {}
+  }
+
+  // Run immediately if DOM ready, else wait for it
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      populateSplash();
+      setTimeout(dismissSplash, 2200);
+    });
+  } else {
+    populateSplash();
+    setTimeout(dismissSplash, 2200);
+  }
+
+  // Absolute hard kill — no matter what, splash is gone at 3.5s
+  setTimeout(dismissSplash, 3500);
+})();
+

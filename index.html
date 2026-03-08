@@ -2,26 +2,21 @@
 <html lang="he" dir="rtl">
 <head>
 <script>
-// Inline splash dismiss — runs immediately, independent of Firebase/script.js
 (function(){
-  var done=false;
-  function kill(){
-    if(done)return; done=true;
+  var _sd=false;
+  function _ks(){
+    if(_sd)return;_sd=true;
     var s=document.getElementById('dazura-splash');
     if(!s)return;
     s.style.transition='opacity 0.5s ease';
     s.style.opacity='0';
-    setTimeout(function(){if(s.parentNode)s.parentNode.removeChild(s);},520);
+    setTimeout(function(){if(s&&s.parentNode)s.parentNode.removeChild(s);},520);
   }
-  // Kill after 2.5s from DOM ready
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',function(){setTimeout(kill,2500);});
-  } else {
-    setTimeout(kill,2500);
-  }
-  // Absolute fallback: kill at 5s no matter what
-  setTimeout(kill,5000);
-  window._dismissSplash=kill;
+  // Kill splash max 3s after DOM ready
+  document.addEventListener('DOMContentLoaded',function(){setTimeout(_ks,2500);});
+  // Hard fallback at 5s
+  setTimeout(_ks,5000);
+  window._killSplash=_ks;
 })();
 </script>
 <link rel="stylesheet" href="style.css">
@@ -1660,9 +1655,9 @@
 
 
 <div class="toast-container" id="toastContainer"></div>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js" defer></script>
 <script src="script.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js" async></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js" async></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js" async></script>
 </body>
 </html>
