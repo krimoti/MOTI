@@ -522,7 +522,7 @@ async function doBiometricLogin(type) {
       hideLoginError();
       document.getElementById('loginScreen').classList.remove('active');
       showModuleSelector();
-      showToast(`✅ ברוך הבא, ${user.fullName}!`, 'success');
+      
     }
   } catch (err) {
     if (err.name === 'NotAllowedError') {
@@ -558,7 +558,7 @@ async function registerBiometric() {
       localStorage.setItem('dazura_biometric_user', JSON.stringify({
         username: currentUser.username, credentialId: credId
       }));
-      showToast('✅ ביומטריה נרשמה בהצלחה!', 'success');
+      
     }
   } catch(err) {
     if (err.name !== 'NotAllowedError') showToast('⚠️ לא ניתן לרשום ביומטריה', 'warning');
@@ -638,56 +638,16 @@ function doLogin() {
 
 async function offerBiometricSetup() {
   if (!window.PublicKeyCredential) return;
-  if (localStorage.getItem('dazura_biometric_user')) return; // already registered
+  if (localStorage.getItem('dazura_biometric_user')) return;
   try {
     const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
     if (!ok) return;
-  } catch(e) { return; }
-
-  const toast = document.createElement('div');
-  toast.id = 'biometricToast';
-  toast.setAttribute('dir', 'rtl');
-  toast.style.cssText = [
-    'position:fixed', 'bottom:100px', 'left:50%', 'transform:translateX(-50%)',
-    'z-index:99999', 'width:calc(100% - 40px)', 'max-width:340px',
-    'background:rgba(5,15,50,0.97)', 'border:1px solid rgba(0,150,255,0.4)',
-    'border-radius:18px', 'padding:16px 18px',
-    'backdrop-filter:blur(20px)', '-webkit-backdrop-filter:blur(20px)',
-    'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
-    'font-family:Heebo,sans-serif'
-  ].join(';');
-  toast.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
-      '<span style="font-size:26px;">🫆</span>' +
-      '<div><div style="font-size:14px;font-weight:800;color:#fff;">הפעל כניסה ביומטרית?</div>' +
-      '<div style="font-size:11px;color:rgba(160,200,255,0.7);margin-top:2px;">טביעת אצבע / זיהוי פנים — פעם אחת</div></div>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;">' +
-      '<button id="biometricSkip" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:10px;font-size:13px;color:rgba(255,255,255,0.6);cursor:pointer;font-family:Heebo,sans-serif;">לא עכשיו</button>' +
-      '<button id="biometricActivate" style="flex:2;background:linear-gradient(135deg,#0050ff,#0099ff);border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:Heebo,sans-serif;">✅ הפעל ביומטריה</button>' +
-    '</div>';
-  document.body.appendChild(toast);
-
-  document.getElementById('biometricSkip').onclick = () => toast.remove();
-  document.getElementById('biometricActivate').onclick = async () => {
-    toast.remove();
-    try {
-      await registerBiometric();
-      // Show success
-      const ok = document.createElement('div');
-      ok.setAttribute('dir','rtl');
-      ok.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(5,80,30,0.95);border:1px solid rgba(0,200,80,0.4);border-radius:14px;padding:14px 20px;font-family:Heebo,sans-serif;font-size:13px;font-weight:700;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
-      ok.textContent = '✅ ביומטריה הופעלה! בפעם הבאה תוכל להיכנס ישירות';
-      document.body.appendChild(ok);
-      setTimeout(() => ok.remove(), 3500);
-    } catch(err) {
-      console.warn('Biometric registration failed:', err);
-    }
-  };
-  // Auto-dismiss after 15s
-  setTimeout(() => { if (document.getElementById('biometricToast')) toast.remove(); }, 15000);
+    // Auto-register silently — device will prompt fingerprint/face natively
+    await registerBiometric();
+  } catch(e) {
+    // Silent fail — user may have dismissed or device doesn't support
+  }
 }
-
 function doLogout() {
   currentUser = null;
   ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen'].forEach(id => {
@@ -811,7 +771,7 @@ function doRegister() {
     document.getElementById('pendingApprovalScreen').classList.add('active');
     document.getElementById('pendingUserName').textContent = fullName;
   } else {
-    showToast('✅ נרשמת בהצלחה! כעת תוכל להיכנס למערכת', 'success');
+    
     document.getElementById('loginUsername').value = username;
   }
   auditLog('register', `${fullName} (${username}) נרשם — ממתין לאישור`);
@@ -1311,7 +1271,7 @@ function openDayModal(dateStr, hol, currentType, isSick) {
       closeModal('dayModal');
       renderCalendar();
       updateSickCount();
-      showToast('✅ דיווח מחלה בוטל', 'success');
+      
     };
     opts.appendChild(btn);
     openModal('dayModal');
@@ -1347,7 +1307,7 @@ function openDayModal(dateStr, hol, currentType, isSick) {
       closeModal('dayModal');
       renderCalendar();
       renderDashboard();
-      showToast(opt.type ? '✅ הבחירה נשמרה' : '🗑️ הבחירה בוטלה', 'success');
+      
     };
     opts.appendChild(btn);
   });
@@ -1546,7 +1506,7 @@ function exportPersonalReport() {
   a.download = `חופשות_${currentUser.fullName}_${year}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('📊 הקובץ הורד בהצלחה', 'success');
+  
 }
 
 function exportAllToCSV() {
@@ -1587,7 +1547,7 @@ function exportAllToCSV() {
   a.download = `כל_החופשות_${year}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('📊 הייצוא הסתיים בהצלחה', 'success');
+  
 }
 
 
@@ -1882,7 +1842,7 @@ function handleLogoUpload(input) {
       const mLogoIcon = document.getElementById('moduleBrandIcon');
       if (mLogoImg)  { mLogoImg.src = base64; mLogoImg.style.display = ''; }
       if (mLogoIcon) mLogoIcon.style.display = 'none';
-      showToast('✅ לוגו הועלה — לחץ "שמור הגדרות" לשמירה', 'success');
+      
     };
     img.src = e.target.result;
   };
@@ -1898,7 +1858,7 @@ function clearLogo() {
   if(logoEl) logoEl.style.display = 'none';
   if(iconEl) iconEl.style.display = '';
   if(document.getElementById('logoFileInput')) document.getElementById('logoFileInput').value = '';
-  showToast('🗑️ לוגו הוסר', 'warning');
+  
 }
 
 function loadCompanySettings() {
@@ -1964,7 +1924,7 @@ function saveCompanySettings() {
   saveSettings(s);
   applyBranding(s);
   auditLog('settings_changed', 'הגדרות חברה עודכנו');
-  showToast('✅ הגדרות נשמרו — הכותרת עודכנה', 'success');
+  
   updateCyclePreview();
 }
 
@@ -2220,7 +2180,7 @@ function exportPayroll() {
   a.download=`payroll_${fmt}_${prevYear}_${String(prevMonth).padStart(2,'0')}.csv`;
   a.click();URL.revokeObjectURL(url);
   auditLog('payroll_export',`ייצוא שכר ${monthNames[prevMonth-1]} ${prevYear} — פורמט: ${fmt}`);
-  showToast(`📤 קובץ שכר יוצא — ${monthNames[prevMonth-1]} ${prevYear}`,'success');
+  
 }
 
 function exportMonthlyReport() {
@@ -2240,7 +2200,7 @@ function exportMonthlyReport() {
   a.download=`monthly_report_${year}_${String(month).padStart(2,'0')}.csv`;
   a.click();URL.revokeObjectURL(url);
   auditLog('monthly_report',`דוח חודשי ${monthNames[month-1]} ${year}`);
-  showToast('📄 דוח חודשי יוצא','success');
+  
 }
 
 // ============================================================
@@ -2349,7 +2309,7 @@ function saveEmpSalary(username, val) {
   if (!db.users[username]) return;
   db.users[username].dailySalary = parseFloat(val) || 0;
   saveDB(db);
-  showToast('💰 שכר יומי נשמר', 'success');
+  
 }
 
 // ============================================================
@@ -2400,7 +2360,7 @@ function saveEmpBirthday(username, birthday) {
   if (!db.users[username]) return;
   db.users[username].birthday = birthday;
   saveDB(db);
-  showToast('🎂 תאריך לידה נשמר', 'success');
+  
 }
 
 function renderAdminVacations() {
@@ -2517,7 +2477,7 @@ function saveQuota() {
   const dateLabel = balanceDateObj
     ? `${balanceDateObj.getDate()} ${monthNames[balanceDateObj.getMonth()]} ${balanceDateObj.getFullYear()}`
     : `01 ינואר ${year}`;
-  auditLog('quota_saved', `מכסה עודכנה ל-${db.users[emp].fullName}: ${annual} ימים`); showToast(`✅ מכסה נשמרה: ${annual} ימים | יתרת פתיחה (01/01): ${carryOver.toFixed(2)}`, 'success');
+  auditLog('quota_saved', `מכסה עודכנה ל-${db.users[emp].fullName}: ${annual} ימים`); 
   renderAdmin();
 }
 
@@ -2588,7 +2548,7 @@ function saveNewEmployee() {
   saveDB(db);
   closeModal('addEmpModal');
   auditLog('employee_added', `עובד חדש נוסף: ${name}`);
-  showToast(`✅ עובד ${name} נוסף בהצלחה`, 'success');
+  
   renderAdmin();
 }
 
@@ -2601,7 +2561,7 @@ function deleteEmployee(username) {
   delete db.vacations[username];
   saveDB(db);
   auditLog('employee_deleted', `עובד נמחק: ${name}`);
-  showToast('🗑️ העובד נמחק', 'success');
+  
   renderAdmin();
 }
 
@@ -2621,11 +2581,11 @@ function clearMonth() {
   saveDB(db);
   renderCalendar();
   renderDashboard();
-  showToast('🗑️ החודש נוקה', 'success');
+  
 }
 
 function submitVacationRequest() {
-  showToast('📨 הבקשה נשלחה למנהל בהצלחה', 'success');
+  
 }
 
 // ============================================================
@@ -2729,7 +2689,7 @@ function addDeptFromMultiselect(containerId) {
   deptSelectedMap[containerId].add(name);
   renderDeptTags(containerId);
   initDeptMultiselect(containerId);
-  showToast(`✅ מחלקה "${name}" נוספה`, 'success');
+  
 }
 
 function renderDeptTags(containerId) {
@@ -2842,7 +2802,7 @@ function setDeptManager(dept, username) {
   if (username) {
     db.deptManagers[dept] = username;
     const managerName = db.users[username]?.fullName || username;
-    showToast(`✅ ${managerName} הוגדר/ה כמנהל/ת של ${dept}`, 'success');
+    
     auditLog('dept_manager_set', `מנהל ${dept} הוגדר: ${managerName}`);
   } else {
     delete db.deptManagers[dept];
@@ -2887,7 +2847,7 @@ function addDepartment() {
   saveDB(db);
   input.value = '';
   renderDeptManagerTable();
-  showToast(`✅ מחלקה "${name}" נוספה — הגדר מנהל בטבלה`, 'success');
+  
 }
 
 function removeDepartment(name) {
@@ -2897,7 +2857,7 @@ function removeDepartment(name) {
   if (db.deptManagers) delete db.deptManagers[name];
   saveDB(db);
   renderDeptManagerTable();
-  showToast(`🗑️ מחלקה "${name}" נמחקה`, 'success');
+  
 }
 
 
@@ -3064,7 +3024,7 @@ function applyExcelQuotas() {
   
   saveDB(db);
   closeModal('quotaExcelConfirmModal');
-  showToast(`✅ מכסות עודכנו בהצלחה ל-${updated} עובדים`, 'success');
+  
   document.getElementById('quotaExcelFileName').textContent = 'לא נבחר קובץ';
   document.getElementById('quotaExcelInput').value = '';
   renderAdmin();
@@ -3173,7 +3133,7 @@ function setTheme(theme, el) {
   if (!db.settings) db.settings = {};
   db.settings.theme = theme;
   saveDB(db);
-  showToast('🎨 צבע הממשק עודכן לכל המשתמשים', 'success');
+  
 }
 
 // Load theme — from DB first (company-wide), fallback to localStorage
@@ -3217,7 +3177,7 @@ function doResetPassword() {
   db.users[passwordTargetUser].password = hashPass(newPass);
   saveDB(db);
   closeModal('resetPasswordModal');
-  showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} אופסה בהצלחה`, 'success');
+  
 }
 
 function openChangePasswordModal(username) {
@@ -3246,7 +3206,7 @@ function doChangeEmpPassword() {
   db.users[passwordTargetUser].password = hashPass(p1);
   saveDB(db);
   closeModal('changeEmpPasswordModal');
-  showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} שונתה בהצלחה`, 'success');
+  
 }
 
 function changeAdminPassword() {
@@ -3276,7 +3236,7 @@ function changeAdminPassword() {
   document.getElementById('adminCurrentPass').value = '';
   document.getElementById('adminNewPass').value = '';
   document.getElementById('adminNewPass2').value = '';
-  showToast('✅ סיסמת ADMIN שונתה בהצלחה! שמור אותה במקום בטוח.', 'success');
+  
 }
 
 // ============================================================
@@ -3287,7 +3247,7 @@ function confirmSubmitRequest() {
   closeModal('submitModal');
   doSubmitRequest(note);
   updateApprovalStatusBadge();
-  showToast('📨 הבקשה נשלחה למנהל', 'success');
+  
 }
 
 function updateApprovalStatusBadge() {
@@ -3510,7 +3470,7 @@ function quickGrantPermission() {
   saveUserPermissions(username, perms);
   const db   = getDB();
   const name = db.users[username]?.fullName || username;
-  showToast(`✅ הרשאות הוענקו ל${name}`, 'success');
+  
   auditLog('permissions_update', `הרשאת ${level} הוענקה ל${username}`);
   renderPermissionsTable();
 }
@@ -3549,7 +3509,7 @@ function savePermRow(username) {
 
   const db = getDB();
   const name = db.users[username]?.fullName || username;
-  showToast(`✅ הרשאות של ${name} נשמרו`, 'success');
+  
   auditLog('permissions_update', `עודכנו הרשאות של ${username}`);
 
   // Re-render the access indicator column
@@ -3717,224 +3677,219 @@ function sendCeoAiQuery(query) {
 }
 
 function buildCeoAiAnswer(q) {
+  if (!q || !q.trim()) return '❓ לא הבנתי את השאלה — נסה שוב.';
   const db = getDB();
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
-  const allUsers = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
+  const allUsers = Object.values(db.users || {}).filter(u => isUserActive(u) && u.role !== 'admin');
   const vacs = db.vacations || {};
   const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  const ql = q.toLowerCase();
+  const days7 = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const ql = (q + '').toLowerCase();
 
-  // ---- Role-based access control ----
-  const _isCeoOrAdmin = currentUser && (isCeoUser() || currentUser.role === 'admin' || currentUser.role === 'manager');
+  // ---- Role ----
+  const isMgr = currentUser && (isCeoUser() || currentUser.role === 'admin' || currentUser.role === 'manager');
 
-  // Financial keywords — CEO/admin only
-  const _finKw = ['עלות','עלויות','חיסכון','שכר','כסף','תקציב','רבעון','שנתי','פיננסי','חיסכון'];
-  if (!_isCeoOrAdmin && _finKw.some(k => ql.includes(k))) {
-    return '🔒 נתונים פיננסיים זמינים למנהלים בלבד.';
+  // ---- Helpers ----
+  function getUserStatus(u, dt) {
+    const t = (vacs[u.username] || {})[dt];
+    return t || 'present';
+  }
+  function fmt(dt) {
+    const d = new Date(dt + 'T00:00:00');
+    return d.getDate() + '/' + (d.getMonth()+1);
   }
 
-  // Other-employee listing — CEO/admin only (except: conflict check in own dept)
-  const _empKw = ['מי בחופשה','מי חולה','מי עובד','כל העובדים','רשימה','שחיקה','burnout'];
-  const _isConflictCheck = ql.includes('מתנגש') || ql.includes('חופף') || ql.includes('אותה מחלקה') || ql.includes('צוות שלי');
-  if (!_isCeoOrAdmin && !_isConflictCheck && _empKw.some(k => ql.includes(k))) {
-    return '🔒 מידע על עובדים אחרים זמין למנהלים בלבד.\n\nאני יכול לעזור לך לבדוק:\n• האם החופשה שלך מתנגשת עם מישהו מהמחלקה שלך\nנסה: "האם החופשה שלי מתנגשת עם הצוות?"';
-  }
-
-  // Conflict check for any employee (own dept only)
-  if (_isConflictCheck) {
-    if (!currentUser) return 'לא מחובר';
-    const myDept = Array.isArray(currentUser.dept) ? currentUser.dept[0] : (currentUser.dept || '');
-    const myVacs = (vacs[currentUser.username] || {});
-    const myUpcoming = Object.entries(myVacs)
-      .filter(([dt, t]) => dt >= todayStr && (t === 'full' || t === 'half'))
-      .map(([dt]) => dt);
-    if (!myUpcoming.length) return '📅 אין לך ימי חופשה מתוכננים קדימה, אין מה לבדוק.';
-    const deptPeers = allUsers.filter(u => {
-      const d = Array.isArray(u.dept) ? u.dept[0] : (u.dept || '');
-      return d === myDept && u.username !== currentUser.username;
-    });
-    const conflicts = [];
-    myUpcoming.forEach(dt => {
-      deptPeers.forEach(u => {
-        const t = (vacs[u.username] || {})[dt];
-        if (t === 'full' || t === 'half') conflicts.push({ dt, name: u.fullName });
-      });
-    });
-    if (!conflicts.length) {
-      return '✅ אין התנגשויות!\nאף אחד ממחלקת ' + myDept + ' לא מתוכנן לחופשה באותם ימים שלך.';
-    }
-    const grouped = {};
-    conflicts.forEach(c => { if (!grouped[c.dt]) grouped[c.dt] = []; grouped[c.dt].push(c.name); });
-    return '⚠️ התנגשויות במחלקת ' + myDept + ':\n' +
-      Object.entries(grouped).sort().map(([dt, names]) => {
-        const d = new Date(dt + 'T00:00:00');
-        return '• ' + d.getDate() + '/' + (d.getMonth()+1) + ' — ' + names.join(', ');
-      }).join('\n');
-  }
-
-
-
-  // ---- זיהוי שאלות מחוץ לתחום ----
-  const TOOL_KW = ["חופשה","חופש","חולה","מחלה","wfh","מהבית","עובד","עובדים","היום","השבוע","החודש","רבעון","שנה","שנתי","עלות","עלויות","חיסכון","שכר","מכסה","יתרה","מחלקה","שחיקה","חיזוי","עמוס","בקשה","אישור","נוכח","נעדר","כמה","מי ","רשימה","דוח","סיכום","צוות","כוח אדם","ימים","תקציב"];
-  const isToolRelated = TOOL_KW.some(kw => ql.includes(kw));
-  if (!isToolRelated) {
-    return "🤖 אני מתמחה אך ורק בנתוני מערכת Dazura.\n\nאני יכול לענות על:\n• מי בחופשה / WFH / חולה היום?\n• עלויות ונתוני חופשות (יומי / חודשי / רבעוני / שנתי)\n• חיזוי ימים עמוסים ומחסור כוח אדם\n• ניתוח שחיקה ורווחת עובדים\n\nשאלות שאינן קשורות לנתוני הצוות — אינן בתחום האחריות שלי.";
-  }
-  // ---- מי בחופשה / מחלה / WFH היום ----
-  if (ql.includes('היום') || ql.includes('עכשיו') || ql.includes('חופשה') || ql.includes('wfh') || ql.includes('מהבית') || ql.includes('מחלה')) {
-    const onVac=[], onWfh=[], onSick=[], present=[];
-    allUsers.forEach(u => {
-      const t = (vacs[u.username]||{})[todayStr];
-      const dept = Array.isArray(u.dept)?u.dept[0]:u.dept||'';
-      if (t==='full'||t==='half') onVac.push(`${u.fullName} (${dept})`);
-      else if (t==='wfh') onWfh.push(`${u.fullName} (${dept})`);
-      else if (t==='sick') onSick.push(`${u.fullName} (${dept})`);
-      else present.push(u.fullName);
-    });
-
-    if (ql.includes('wfh') || ql.includes('מהבית')) {
-      return onWfh.length
-        ? `🏠 עובדים מהבית היום (${onWfh.length}):\n${onWfh.join('\n')}`
-        : '🏠 אין עובדים שדיווחו על עבודה מהבית היום.';
-    }
-    if (ql.includes('מחלה')) {
-      return onSick.length
-        ? `🤒 בתאריך היום בדיווח מחלה (${onSick.length}):\n${onSick.join('\n')}`
-        : '🤒 אין דיווחי מחלה להיום.';
-    }
-    if (ql.includes('חופשה')) {
-      return onVac.length
-        ? `🏖️ בחופשה היום (${onVac.length}):\n${onVac.join('\n')}`
-        : '✅ אין עובדים בחופשה היום.';
-    }
-    // Summary
-    let ans = `📊 סטטוס צוות לתאריך היום:\n`;
-    ans += `• 🏖️ בחופשה: ${onVac.length}${onVac.length ? ' — '+onVac.join(', ') : ''}\n`;
-    ans += `• 🏠 WFH: ${onWfh.length}${onWfh.length ? ' — '+onWfh.join(', ') : ''}\n`;
-    ans += `• 🤒 מחלה: ${onSick.length}${onSick.length ? ' — '+onSick.join(', ') : ''}\n`;
-    ans += `• ✅ במשרד: ${present.length}`;
-    return ans;
-  }
-
-  // ---- חיסכון WFH / עלויות ----
-  if (ql.includes('חיסכון') || ql.includes('עלות') || ql.includes('עלויות') || ql.includes('כסף') || ql.includes('שכר')) {
-    const getPeriod = () => {
-      if (ql.includes('שנת') || ql.includes('שנה') || ql.includes('שנתי')) return { label: 'שנה', months: 12, year: today.getFullYear(), from: 1, to: 12 };
-      if (ql.includes('רבעון') || ql.includes('רבעוני') || ql.includes('quarter')) {
-        const q = Math.floor(today.getMonth()/3);
-        const from = q*3+1, to = Math.min(q*3+3, 12);
-        return { label: `רבעון ${q+1}`, months: 3, year: today.getFullYear(), from, to };
-      }
-      if (ql.includes('שבוע')) return { label: 'שבוע', months: 0, week: true };
-      return { label: 'חודש', months: 1, year: today.getFullYear(), from: today.getMonth()+1, to: today.getMonth()+1 };
-    };
-    const period = getPeriod();
-
-    let totalVacCost = 0, totalVacDays = 0, totalWfhDays = 0, totalWfhSave = 0;
-    allUsers.forEach(u => {
-      const salary = u.dailySalary || 850;
-      const uvacs = vacs[u.username] || {};
-      Object.entries(uvacs).forEach(([dt, type]) => {
-        const d = new Date(dt+'T00:00:00');
-        if (d.getFullYear() !== period.year) return;
-        const m = d.getMonth()+1;
-        if (m < period.from || m > period.to) return;
-        if (type==='full')  { totalVacDays++; totalVacCost += salary; }
-        else if (type==='half') { totalVacDays += 0.5; totalVacCost += salary*0.5; }
-        else if (type==='wfh') { totalWfhDays++; totalWfhSave += salary*0.3; }
-      });
-    });
-
-    return `💰 ניתוח עלויות — ${period.label}:\n\n` +
-      `🏖️ ימי חופשה: ${totalVacDays}\n` +
-      `   עלות ישירה: ₪${Math.round(totalVacCost).toLocaleString()}\n\n` +
-      `🏠 ימי WFH: ${totalWfhDays}\n` +
-      `   חיסכון משוער (נסיעות+חשמל+מקום): ₪${Math.round(totalWfhSave).toLocaleString()}\n\n` +
-      `📈 מאזן נטו: ${totalWfhSave > totalVacCost ? '✅' : '⚠️'} ₪${Math.abs(Math.round(totalWfhSave - totalVacCost)).toLocaleString()} ${totalWfhSave > totalVacCost ? 'לטובת החברה' : 'לחובת החברה'}`;
-  }
-
-  // ---- חיזוי ימים עמוסים ----
-  if (ql.includes('חזה') || ql.includes('חיזוי') || ql.includes('עמוס') || ql.includes('הבא') || ql.includes('ניבוי')) {
-    const weeks = [];
-    for (let w=0; w<4; w++) {
-      const ws = new Date(today);
-      ws.setDate(today.getDate() + w*7 + (1 - today.getDay()));
-      const dates = Array.from({length:5}, (_,i) => {
-        const d = new Date(ws); d.setDate(ws.getDate()+i);
-        return d.toISOString().slice(0,10);
-      });
-      let absTotal=0, wfhTotal=0;
-      allUsers.forEach(u => {
-        dates.forEach(dt => {
-          const t = (vacs[u.username]||{})[dt];
-          if (t==='full'||t==='half') absTotal++;
-          else if (t==='wfh') wfhTotal++;
-        });
-      });
-      const pct = allUsers.length > 0 ? Math.round((absTotal/(allUsers.length*5))*100) : 0;
-      weeks.push({ label: `שבוע ${ws.getDate()}/${ws.getMonth()+1}`, pct, absTotal, wfhTotal });
-    }
-    const sorted = [...weeks].sort((a,b) => b.pct - a.pct);
-    return `📅 חיזוי עומס 4 שבועות קדימה:\n\n` +
-      weeks.map(w => {
-        const bar = '█'.repeat(Math.round(w.pct/10)) + '░'.repeat(10-Math.round(w.pct/10));
-        const emoji = w.pct>=40?'🔴':w.pct>=20?'🟡':'🟢';
-        return `${emoji} ${w.label}\n   ${bar} ${w.pct}% היעדרויות (${w.absTotal} ימים, ${w.wfhTotal} WFH)`;
-      }).join('\n\n') +
-      `\n\n💡 שבוע עמוס ביותר: ${sorted[0].label} (${sorted[0].pct}%)\n💡 שבוע שקט ביותר: ${sorted[sorted.length-1].label} (${sorted[sorted.length-1].pct}%)`;
-  }
-
-  // ---- שחיקה ----
-  if (ql.includes('שחיקה') || ql.includes('לא לקח') || ql.includes('סיכון') || ql.includes('עייפות')) {
-    const ninetyAgo = new Date(today); ninetyAgo.setDate(ninetyAgo.getDate()-90);
-    const atRisk = allUsers.filter(u => {
-      const uvacs = vacs[u.username] || {};
-      return Object.entries(uvacs).filter(([dt,t]) => new Date(dt)>=ninetyAgo && (t==='full'||t==='half')).length === 0;
-    });
-    return atRisk.length
-      ? `🚨 ${atRisk.length} עובדים ללא חופשה ב-90 יום האחרונים:\n${atRisk.map(u=>`• ${u.fullName} (${Array.isArray(u.dept)?u.dept[0]:u.dept})`).join('\n')}\n\n💡 מומלץ: שיחה אישית ותזמון חופשה בתיאום`
-      : '✅ כל העובדים לקחו חופשה ב-90 הימים האחרונים — אין סיכון שחיקה מיידי.';
-  }
-
-  // ---- רשימת WFH שבוע ----
-  if (ql.includes('שבוע')) {
-    const days = Array.from({length:7}, (_,i) => {
-      const d = new Date(today); d.setDate(today.getDate()+i);
-      return d.toISOString().slice(0,10);
-    });
-    const wfhThisWeek = new Set();
-    allUsers.forEach(u => {
-      days.forEach(dt => {
-        if ((vacs[u.username]||{})[dt]==='wfh') wfhThisWeek.add(u.fullName);
-      });
-    });
-    return wfhThisWeek.size
-      ? `🏠 עובדים שדיווחו על WFH השבוע (${wfhThisWeek.size}):\n${[...wfhThisWeek].join('\n')}`
-      : '🏠 אין עובדים שדיווחו על WFH השבוע.';
-  }
-
-  // ---- סטטוס אישי (כל עובד) ----
-  if (ql.includes('שלי') || ql.includes('שלנו') || ql.includes('הסטטוס') || ql.includes('יתרה') || ql.includes('נותרו')) {
-    if (!currentUser) return 'לא מחובר';
+  // ---- 1. PERSONAL STATUS (any user) ----
+  if (ql.includes('שלי') || ql.includes('אני') || ql.includes('הסטטוס שלי') || ql.includes('יתרה') || ql.includes('נותרו לי') || ql.includes('כמה ימים נותרו') || ql.includes('מצבי')) {
+    if (!currentUser) return 'לא מחובר.';
     const myV = vacs[currentUser.username] || {};
-    const todayStatus = myV[todayStr];
-    const statusLabel = todayStatus === 'full' ? '🏖️ בחופשה' : todayStatus === 'half' ? '🌓 חצי יום חופשה' : todayStatus === 'wfh' ? '🏠 עובד מהבית' : todayStatus === 'sick' ? '🤒 מחלה' : '🏢 במשרד';
+    const ts = myV[todayStr];
+    const statusLabel = ts === 'full' ? '🏖️ בחופשה' : ts === 'half' ? '🌓 חצי יום חופשה' : ts === 'wfh' ? '🏠 עובד מהבית' : ts === 'sick' ? '🤒 מחלה' : '🏢 במשרד';
     const quota = currentUser.vacationQuota || 14;
-    const used  = Object.values(myV).filter(t => t === 'full').length + Object.values(myV).filter(t => t === 'half').length * 0.5;
+    const usedFull = Object.values(myV).filter(t => t === 'full').length;
+    const usedHalf = Object.values(myV).filter(t => t === 'half').length;
+    const used = usedFull + usedHalf * 0.5;
     const remaining = Math.max(0, quota - used);
-    const upcoming = Object.entries(myV).filter(([dt, t]) => dt > todayStr && (t === 'full' || t === 'half')).sort();
+    const upcoming = Object.entries(myV).filter(([dt,t]) => dt > todayStr && (t==='full'||t==='half')).sort(([a],[b]) => a<b?-1:1);
     return '👤 הסטטוס שלך:\n' +
       '• היום: ' + statusLabel + '\n' +
       '• מכסה שנתית: ' + quota + ' ימים\n' +
       '• נוצלו: ' + used + ' | נותרו: ' + remaining + '\n' +
-      (upcoming.length ? '• חופשות מתוכננות: ' + upcoming.slice(0,3).map(([dt]) => { const d=new Date(dt+'T00:00:00'); return d.getDate()+'/'+(d.getMonth()+1); }).join(', ') : '• אין חופשות מתוכננות קדימה');
+      (upcoming.length ? '• תוכניות קדימה: ' + upcoming.slice(0,5).map(([dt])=>fmt(dt)).join(', ') : '• אין חופשות מתוכננות קדימה');
   }
 
-  // ---- Default fallback ----
-  const todayVac = allUsers.filter(u => {const t=(vacs[u.username]||{})[todayStr]; return t==='full'||t==='half';}).length;
-  const todayWfh = allUsers.filter(u => (vacs[u.username]||{})[todayStr]==='wfh').length;
-  return `🤖 הנה סיכום מהיר:\n• עובדים פעילים: ${allUsers.length}\n• בחופשה היום: ${todayVac}\n• WFH היום: ${todayWfh}\n• במשרד: ${allUsers.length - todayVac - todayWfh}\n\nנסה לשאול שאלה ספציפית כמו:\n"מי בחופשה השבוע?" / "כמה חסכנו ב-WFH?" / "חזה חודש הבא"`;
+  // ---- 2. CONFLICT CHECK (any user — own dept only) ----
+  if (ql.includes('מתנגש') || ql.includes('חופף') || ql.includes('אותה מחלקה') || ql.includes('צוות שלי') || ql.includes('כולם ביחד') || ql.includes('ביחד בחופשה')) {
+    if (!currentUser) return 'לא מחובר.';
+    const myDept = Array.isArray(currentUser.dept) ? currentUser.dept[0] : (currentUser.dept || '');
+    const myVacs = vacs[currentUser.username] || {};
+    const myUpcoming = Object.entries(myVacs).filter(([dt,t]) => dt >= todayStr && (t==='full'||t==='half')).map(([dt])=>dt);
+    if (!myUpcoming.length) return '📅 אין לך ימי חופשה מתוכננים — אין מה לבדוק.';
+    const peers = allUsers.filter(u => {
+      const d = Array.isArray(u.dept) ? u.dept[0] : (u.dept||'');
+      return d === myDept && u.username !== currentUser.username;
+    });
+    const conflicts = {};
+    myUpcoming.forEach(dt => {
+      peers.forEach(u => {
+        const t = (vacs[u.username]||{})[dt];
+        if (t==='full'||t==='half') { if(!conflicts[dt]) conflicts[dt]=[]; conflicts[dt].push(u.fullName); }
+      });
+    });
+    const dates = Object.keys(conflicts).sort();
+    if (!dates.length) return '✅ אין התנגשויות!\nאף אחד ממחלקת ' + myDept + ' לא בחופשה באותם ימים שלך.';
+    return '⚠️ התנגשויות במחלקת ' + myDept + ':\n' +
+      dates.map(dt => '• ' + fmt(dt) + ' — ' + conflicts[dt].join(', ')).join('\n');
+  }
+
+  // ---- 3. FINANCIAL — CEO/Manager only ----
+  const isFinancial = ql.includes('עלות') || ql.includes('עלויות') || ql.includes('חיסכון') ||
+                      ql.includes('שכר') || ql.includes('כסף') || ql.includes('תקציב') ||
+                      ql.includes('רבעון') || ql.includes('שנתי') || ql.includes('פיננס');
+  if (isFinancial) {
+    if (!isMgr) return '🔒 נתונים פיננסיים זמינים למנהלים בלבד.';
+    // Determine period
+    let year = today.getFullYear(), fromM = today.getMonth()+1, toM = fromM, label = 'חודש ' + months[today.getMonth()];
+    if (ql.includes('שנ')) { fromM=1; toM=12; label='שנת ' + year; }
+    else if (ql.includes('רבעון')) {
+      const qn = Math.floor(today.getMonth()/3);
+      fromM = qn*3+1; toM = Math.min(qn*3+3,12);
+      label = 'רבעון ' + (qn+1);
+    }
+    let vacDays=0, vacCost=0, wfhDays=0, wfhSave=0;
+    allUsers.forEach(u => {
+      const sal = u.dailySalary || 850;
+      Object.entries(vacs[u.username]||{}).forEach(([dt,t]) => {
+        const d = new Date(dt+'T00:00:00');
+        if (d.getFullYear()!==year) return;
+        const m = d.getMonth()+1;
+        if (m < fromM || m > toM) return;
+        if (t==='full')  { vacDays++; vacCost+=sal; }
+        else if (t==='half') { vacDays+=0.5; vacCost+=sal*0.5; }
+        else if (t==='wfh') { wfhDays++; wfhSave+=sal*0.3; }
+      });
+    });
+    return '💰 ניתוח כספי — ' + label + ':\n\n' +
+      '🏖️ ימי חופשה: ' + vacDays + '\n' +
+      '   עלות ישירה: ₪' + Math.round(vacCost).toLocaleString() + '\n\n' +
+      '🏠 ימי WFH: ' + wfhDays + '\n' +
+      '   חיסכון משוער: ₪' + Math.round(wfhSave).toLocaleString() + '\n\n' +
+      '📊 מאזן: ' + (wfhSave >= vacCost ? '✅ ' : '⚠️ ') +
+      '₪' + Math.abs(Math.round(wfhSave - vacCost)).toLocaleString() +
+      (wfhSave >= vacCost ? ' לטובת החברה' : ' לחובת החברה');
+  }
+
+  // ---- 4. WHO IS ON VACATION/WFH/SICK TODAY ----
+  const isWho = ql.includes('מי') || ql.includes('רשימה') || ql.includes('כולם');
+  const isToday = ql.includes('היום') || ql.includes('עכשיו');
+  const isWeek  = ql.includes('השבוע') || ql.includes('שבוע');
+
+  if (isWho || isToday || isWeek) {
+    if (!isMgr) return '🔒 מידע על עובדים אחרים זמין למנהלים בלבד.\n\nאני יכול לעזור לך:\n• לבדוק את הסטטוס שלך\n• לבדוק אם יש התנגשות במחלקה שלך';
+
+    // Which status are we asking about?
+    const wantWfh  = ql.includes('מהבית') || ql.includes('wfh');
+    const wantSick = ql.includes('חול') || ql.includes('מחלה');
+    const wantVac  = ql.includes('חופשה') || ql.includes('חופש') || (!wantWfh && !wantSick);
+
+    if (isWeek && !isToday) {
+      // Weekly WFH list
+      const weekDates = Array.from({length:7},(_,i)=>{const d=new Date(today);d.setDate(today.getDate()+i);return d.toISOString().slice(0,10);});
+      const wfhSet = new Set();
+      allUsers.forEach(u => weekDates.forEach(dt => { if((vacs[u.username]||{})[dt]==='wfh') wfhSet.add(u.fullName); }));
+      return wfhSet.size
+        ? '🏠 WFH השבוע (' + wfhSet.size + '):\n' + [...wfhSet].join('\n')
+        : '🏠 אין דיווחי WFH השבוע.';
+    }
+
+    // Today
+    const dt = todayStr;
+    const onVac=[], onWfh=[], onSick=[], present=[];
+    allUsers.forEach(u => {
+      const t = getUserStatus(u, dt);
+      const dept = Array.isArray(u.dept)?u.dept[0]:(u.dept||'');
+      const label = u.fullName + (dept ? ' (' + dept + ')' : '');
+      if (t==='full'||t==='half') onVac.push(label);
+      else if (t==='wfh') onWfh.push(label);
+      else if (t==='sick') onSick.push(label);
+      else present.push(u.fullName);
+    });
+
+    if (wantWfh && !wantVac && !wantSick) return onWfh.length ? '🏠 WFH היום (' + onWfh.length + '):\n' + onWfh.join('\n') : '🏠 אין עובדים שדיווחו WFH היום.';
+    if (wantSick && !wantVac && !wantWfh) return onSick.length ? '🤒 מחלה היום (' + onSick.length + '):\n' + onSick.join('\n') : '🤒 אין דיווחי מחלה היום.';
+    if (wantVac && !wantWfh && !wantSick) return onVac.length ? '🏖️ בחופשה היום (' + onVac.length + '):\n' + onVac.join('\n') : '✅ אין עובדים בחופשה היום.';
+    // Summary
+    return '📊 סטטוס צוות — היום:\n' +
+      '🏖️ חופשה: ' + onVac.length + (onVac.length ? '\n   ' + onVac.join('\n   ') : '') + '\n' +
+      '🏠 WFH: ' + onWfh.length + (onWfh.length ? '\n   ' + onWfh.join('\n   ') : '') + '\n' +
+      '🤒 מחלה: ' + onSick.length + (onSick.length ? '\n   ' + onSick.join('\n   ') : '') + '\n' +
+      '✅ במשרד: ' + present.length;
+  }
+
+  // ---- 5. FORECAST ----
+  if (ql.includes('חזה') || ql.includes('חיזוי') || ql.includes('עמוס') || ql.includes('ניבוי') || ql.includes('קדימה')) {
+    if (!isMgr) return '🔒 חיזוי כוח אדם זמין למנהלים בלבד.';
+    const weeks = Array.from({length:4}, (_,w) => {
+      const ws = new Date(today);
+      ws.setDate(today.getDate() + w*7 + (1 - ((today.getDay()||7)-1)));
+      const dates = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d.toISOString().slice(0,10); });
+      let abs=0, wfh=0;
+      allUsers.forEach(u => dates.forEach(dt => {
+        const t=(vacs[u.username]||{})[dt];
+        if(t==='full'||t==='half') abs++;
+        else if(t==='wfh') wfh++;
+      }));
+      const total = allUsers.length * 5 || 1;
+      const pct = Math.round((abs/total)*100);
+      const d0 = new Date(dates[0]+'T00:00:00');
+      return { label: d0.getDate()+'/'+(d0.getMonth()+1), pct, abs, wfh };
+    });
+    const busiest = [...weeks].sort((a,b)=>b.pct-a.pct)[0];
+    const quietest = [...weeks].sort((a,b)=>a.pct-b.pct)[0];
+    return '📅 חיזוי עומס — 4 שבועות קדימה:\n\n' +
+      weeks.map(w => {
+        const e = w.pct>=40?'🔴':w.pct>=20?'🟡':'🟢';
+        const bar = '█'.repeat(Math.round(w.pct/10)) + '░'.repeat(10-Math.round(w.pct/10));
+        return e + ' שבוע ' + w.label + '\n   ' + bar + ' ' + w.pct + '% היעדרות (' + w.abs + ' ימים, ' + w.wfh + ' WFH)';
+      }).join('\n\n') +
+      '\n\n💡 עמוס ביותר: שבוע ' + busiest.label + ' (' + busiest.pct + '%)' +
+      '\n💡 שקט ביותר: שבוע ' + quietest.label + ' (' + quietest.pct + '%)';
+  }
+
+  // ---- 6. BURNOUT ----
+  if (ql.includes('שחיקה') || ql.includes('burnout') || ql.includes('לא לקח') || ql.includes('סיכון')) {
+    if (!isMgr) return '🔒 מידע זה זמין למנהלים בלבד.';
+    const ninetyAgo = new Date(today); ninetyAgo.setDate(ninetyAgo.getDate()-90);
+    const at = allUsers.filter(u => !Object.entries(vacs[u.username]||{}).some(([dt,t])=>new Date(dt)>=ninetyAgo&&(t==='full'||t==='half')));
+    return at.length
+      ? '🚨 ' + at.length + ' עובדים ללא חופשה ב-90 יום האחרונים:\n' +
+        at.map(u=>'• '+u.fullName+' ('+(Array.isArray(u.dept)?u.dept[0]:(u.dept||''))+')').join('\n') +
+        '\n\n💡 מומלץ: שיחה אישית ותזמון חופשה'
+      : '✅ כל העובדים לקחו חופשה ב-90 הימים האחרונים — אין סיכון שחיקה.';
+  }
+
+  // ---- 7. DEFAULT (out of scope) ----
+  const toolKw = ['חופשה','חופש','חולה','מחלה','wfh','מהבית','עובד','היום','שבוע','חודש','רבעון','שנה','עלות','חיסכון','שכר','שחיקה','חיזוי','עמוס','יתרה','מחלקה','צוות','כמה','מי ','סטטוס','ימים'];
+  const isRelevant = toolKw.some(kw => ql.includes(kw));
+  if (!isRelevant) {
+    return '🤖 אני מתמחה בנתוני מערכת Dazura בלבד.\n\n' +
+      'אני יכול לענות על:\n' +
+      '• מי בחופשה / WFH / חולה היום?\n' +
+      '• יתרת החופשה שלך\n' +
+      '• התנגשות חופשות במחלקה שלך\n' +
+      (isMgr ? '• עלויות ותקציב חופשות\n• חיזוי עומס ושחיקה\n' : '');
+  }
+
+  // Default summary
+  const onV = allUsers.filter(u=>{const t=(vacs[u.username]||{})[todayStr];return t==='full'||t==='half';}).length;
+  const onW = allUsers.filter(u=>(vacs[u.username]||{})[todayStr]==='wfh').length;
+  return '📊 סיכום מהיר:\n' +
+    '• עובדים פעילים: ' + allUsers.length + '\n' +
+    '• בחופשה היום: ' + onV + '\n' +
+    '• WFH היום: ' + onW + '\n' +
+    '• במשרד: ' + (allUsers.length - onV - onW) + '\n\n' +
+    'נסה לשאול שאלה ספציפית יותר.';
 }
 
 function clearCeoAiChat() {
@@ -4008,7 +3963,7 @@ function sendCeoMessage() {
   db.announcements.unshift(ann);
   saveDB(db);
   closeModal('ceoMessageModal');
-  showToast('📢 ההודעה נשלחה לכל הצוות', 'success');
+  
   auditLog('announcement_sent', `${currentUser.fullName} שלח הודעה: ${text.substring(0,50)}`);
 }
 
@@ -4045,7 +4000,7 @@ function saveHandover() {
   };
   saveDB(db);
   closeModal('handoverModal');
-  showToast('✅ פרוטוקול העברת מקל נשמר ונשלח למנהל', 'success');
+  
   auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
 }
 
@@ -4094,7 +4049,7 @@ function saveSickDay(dateStr, type) {
   saveDB(db);
   closeModal('dayModal');
   renderCalendar();
-  showToast('🤒 דיווח מחלה נשמר', 'info');
+  
   auditLog('sick_report', `${currentUser.fullName} דיווח מחלה ל-${dateStr}`);
   updateSickCount();
 }
@@ -4104,7 +4059,7 @@ function reportSickToday() {
   const db = getDB();
   if (!db.sick) db.sick = {};
   const key = currentUser.username + '_' + today;
-  if (db.sick[key]) { showToast('כבר דיווחת מחלה היום', 'info'); return; }
+  if (db.sick[key]) {  return; }
   db.sick[key] = {
     username: currentUser.username, fullName: currentUser.fullName,
     dept: Array.isArray(currentUser.dept) ? currentUser.dept[0] : (currentUser.dept || ''),
@@ -4112,7 +4067,7 @@ function reportSickToday() {
   };
   saveDB(db);
   closeModal('sickTodayModal');
-  showToast('🤒 דיווח מחלה נשמר', 'info');
+  
   auditLog('sick_report', `${currentUser.fullName} דיווח מחלה להיום`);
   updateSickCount();
 }
@@ -4160,7 +4115,7 @@ function reportDailyStatus(status) {
   saveDB(db);
   loadDailyStatusWidget();
   const labels = { office:'🏢 במשרד', home:'🏠 מהבית', out:'🚗 בחוץ' };
-  showToast(`✅ ${labels[status]} — הסטטוס עודכן`, 'success');
+  
 }
 
 function loadDailyStatusWidget() {
@@ -4306,7 +4261,7 @@ function deleteAnnouncement(id) {
   db.announcements = (db.announcements || []).filter(a => a.id !== id);
   saveDB(db);
   openCeoAnnouncementsModal();
-  showToast('🗑️ ההודעה נמחקה', 'info');
+  
 }
 
 // ============================================================
@@ -4390,7 +4345,7 @@ function clearAuditLog() {
   db.auditLog = [];
   saveDB(db);
   renderAuditLog();
-  showToast('🗑️ יומן השינויים נמחק', 'info');
+  
 }
 
 // ============================================================
@@ -4752,7 +4707,7 @@ function saveTempPassword() {
   if (!db.settings) db.settings = {};
   db.settings.tempPassword = val;
   saveDB(db);
-  showToast('✅ סיסמה זמנית נשמרה', 'success');
+  
 }
 
 // ============================================================
@@ -4794,7 +4749,7 @@ function doForcePasswordChange() {
   pushToFirebase();
   currentUser = null;
   document.getElementById('forcePasswordScreen').classList.remove('active');
-  showToast('✅ סיסמה עודכנה! התחבר עם הסיסמה החדשה.', 'success');
+  
   // Return to login screen
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginUsername').value = savedUsername;
@@ -4853,7 +4808,7 @@ function saveProfile() {
   }
 
   closeModal('profileModal');
-  showToast('✅ פרופיל עודכן בהצלחה', 'success');
+  
   auditLog('profile_update', `${currentUser.username} עדכן פרטי פרופיל`);
 }
 
@@ -4899,7 +4854,7 @@ function approveRegistration(username) {
   if (!db.users[username]) return;
   db.users[username].status = 'active';
   saveDB(db);
-  showToast(`✅ ${db.users[username].fullName} אושר/ה`, 'success');
+  
   auditLog('approve_user', `אושרה הרשמה של ${username}`);
   renderPendingRegistrations();
 }
@@ -4910,7 +4865,7 @@ function rejectRegistration(username) {
   if (!confirm(`למחוק את הרשמת ${name}?`)) return;
   delete db.users[username];
   saveDB(db);
-  showToast(`🗑️ הרשמת ${name} נמחקה`, 'info');
+  
   auditLog('reject_user', `נדחתה הרשמה של ${username}`);
   renderPendingRegistrations();
 }
@@ -5431,7 +5386,7 @@ function exportTimeClock(range) {
   a.download = `דיווח_שעות_${from}_עד_${to}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast(`✅ יוצאו ${rows.length} דיווחים`, 'success');
+  
   auditLog('timeclock_export', `ייצוא דיווחי שעות ${from} עד ${to} — ${rows.length} רשומות`);
 }
 
@@ -5754,7 +5709,7 @@ function doChangePassword() {
   saveDB(db);
   closeModal('changePasswordModal');
   auditLog('password_change', `${currentUser.username} שינה סיסמה`);
-  showToast('✅ הסיסמה עודכנה בהצלחה', 'success');
+  
 }
 
 
@@ -5953,7 +5908,7 @@ function disconnectFirebase() {
   document.getElementById('fbResetBtn').style.display = 'none';
   document.getElementById('firebaseStatusDiv').innerHTML =
     '<div class="alert alert-info"><span class="alert-icon">🔌</span><span>נותק. הנתונים נשמרים מקומית בלבד.</span></div>';
-  showToast('🔌 נותק מ-Firebase', 'warning');
+  
 }
 
 async function resetFirebase() {
@@ -5962,7 +5917,7 @@ async function resetFirebase() {
   try {
     await firebaseDB.collection('vacationSystem').doc('data').delete();
     await pushToFirebase();
-    showToast('✅ Firebase אופס ומסונכרן מחדש', 'success');
+    
   } catch(err) {
     showToast('❌ שגיאה: ' + err.message, 'error');
   }
@@ -6148,12 +6103,12 @@ async function resetLocalData() {
         updatedBy:        'system_reset'
       };
       await firebaseDB.collection('vacationSystem').doc('data').set(payload);
-      showToast('✅ כל הנתונים אופסו — מקומית ו-Firebase. מרענן...', 'success');
+      
     } catch(e) {
       showToast('⚠️ אופס מקומית. שגיאת Firebase: ' + e.message, 'warning');
     }
   } else {
-    showToast('✅ הנתונים אופסו. מרענן...', 'success');
+    
   }
   setTimeout(() => location.reload(), 1500);
 }
@@ -6169,7 +6124,7 @@ function exportBackup() {
   a.download = `vacation_backup_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('💾 גיבוי הורד בהצלחה', 'success');
+  
 }
 
 // ============================================================
@@ -6388,7 +6343,7 @@ function savePermissionsForUser(username) {
   db.permissions[username] = perms;
   saveDB(db);
   pushToFirebase();
-  showToast('✅ הרשאות נשמרו', 'success');
+  
   // Refresh the row
   renderPermForEmployee();
 }
