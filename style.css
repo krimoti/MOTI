@@ -1794,80 +1794,220 @@ tbody tr:hover { background: var(--surface2); }
 ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
 /* ============================================================
-   DAZURA SPLASH SCREEN
+   DAZURA SPLASH SCREEN — 2030 Edition
    ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+
+/* Typing dots animation */
+@keyframes typingDot {
+  0%,80%,100% { transform: scale(0.6); opacity: 0.4; }
+  40%          { transform: scale(1);   opacity: 1; }
+}
+
 #dazura-splash {
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, #0A2342, #12355B, #1D4E89);
+  background: #000510;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.8s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
 }
+
+/* Animated nebula background */
+#dazura-splash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 30%, rgba(0,80,255,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 70%, rgba(100,0,255,0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(0,200,255,0.08) 0%, transparent 60%);
+  animation: nebulaShift 8s ease-in-out infinite alternate;
+}
+
+/* Particle grid */
+#dazura-splash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: gridDrift 20s linear infinite;
+  opacity: 0.4;
+}
+
+@keyframes nebulaShift {
+  from { transform: scale(1) rotate(0deg); }
+  to   { transform: scale(1.08) rotate(2deg); }
+}
+@keyframes gridDrift {
+  from { transform: translateY(0); }
+  to   { transform: translateY(48px); }
+}
+
 .dazura-container {
   text-align: center;
   color: white;
   font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+  position: relative;
+  z-index: 2;
+  padding: 0 24px;
 }
+
+/* Glowing ring behind logo */
+.dazura-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dazura-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 60%, rgba(0,150,255,0.8), transparent 70%);
+  animation: ringRotate 2s linear infinite;
+}
+.dazura-ring::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: rgba(0,20,60,0.9);
+  border: 1px solid rgba(0,150,255,0.3);
+}
+@keyframes ringRotate {
+  to { transform: rotate(360deg); }
+}
+.dazura-ring-inner {
+  position: relative;
+  z-index: 1;
+  font-size: 48px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(0,150,255,0.9));
+  animation: iconFloat 3s ease-in-out infinite;
+}
+@keyframes iconFloat {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
 .dazura-logo {
-  font-size: 42px;
+  font-family: 'Orbitron', 'Heebo', sans-serif;
+  font-size: 38px;
   font-weight: 900;
-  letter-spacing: 3px;
-  animation: dazPulse 2s infinite;
-  text-shadow: 0 2px 24px rgba(255,255,255,0.15);
+  letter-spacing: 6px;
+  background: linear-gradient(135deg, #fff 0%, #80ccff 50%, #0088ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: logoGlow 3s ease-in-out infinite alternate;
+  text-transform: uppercase;
 }
+@keyframes logoGlow {
+  from { filter: drop-shadow(0 0 8px rgba(0,136,255,0.5)); }
+  to   { filter: drop-shadow(0 0 20px rgba(0,136,255,0.9)); }
+}
+
 .dazura-sub {
   margin-top: 8px;
-  font-size: 14px;
-  opacity: 0.7;
-  letter-spacing: 1.5px;
-  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, rgba(255,255,255,0.4), rgba(120,200,255,0.8), rgba(255,255,255,0.4));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 300;
 }
+
 .dazura-status {
   margin-top: 22px;
-  font-size: 12px;
-  opacity: 0.55;
-  letter-spacing: 0.5px;
+  font-size: 11px;
+  opacity: 0.45;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   min-height: 18px;
 }
+
+/* Segmented loader bar */
 .dazura-loader {
-  margin: 22px auto 0;
-  width: 34px;
-  height: 34px;
-  border: 2.5px solid rgba(255,255,255,0.25);
-  border-top: 2.5px solid white;
-  border-radius: 50%;
-  animation: dazSpin 0.9s linear infinite;
+  margin: 28px auto 0;
+  width: 180px;
+  height: 2px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
 }
+.dazura-loader::after {
+  content: '';
+  position: absolute;
+  left: -60%;
+  top: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0,150,255,0.9), rgba(150,220,255,1), transparent);
+  animation: loaderSweep 1.4s ease-in-out infinite;
+}
+@keyframes loaderSweep {
+  from { left: -60%; }
+  to   { left: 110%; }
+}
+
 .dazura-stats {
-  margin-top: 28px;
+  margin-top: 36px;
   display: flex;
-  gap: 20px;
+  gap: 12px;
   justify-content: center;
   opacity: 0;
-  transform: translateY(8px);
-  animation: dazStatsIn 0.5s 0.8s ease forwards;
+  transform: translateY(16px);
+  animation: dazStatsIn 0.6s 0.9s cubic-bezier(0.34,1.56,0.64,1) forwards;
 }
 .dazura-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 14px 18px;
+  backdrop-filter: blur(12px);
+  min-width: 80px;
+  transition: transform 0.3s ease;
 }
+.dazura-stat:hover { transform: translateY(-3px); }
 .dazura-stat-num {
-  font-size: 36px;
-  font-weight: 900;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
   color: #fff;
   line-height: 1;
+  background: linear-gradient(135deg, #fff, #80ccff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 .dazura-stat-label {
-  font-size: 16px;
-  opacity: 0.6;
-  letter-spacing: 0.3px;
+  font-size: 11px;
+  opacity: 0.55;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 400;
 }
-.dazura-stat-icon { font-size: 26px; }
+.dazura-stat-icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.3));
+}
 @keyframes dazSpin { to { transform: rotate(360deg); } }
 @keyframes dazPulse {
   0%   { opacity: 0.88; transform: scale(1); }
@@ -1876,4 +2016,234 @@ tbody tr:hover { background: var(--surface2); }
 }
 @keyframes dazStatsIn {
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   LOGIN SCREEN — 2030 Glassmorphism upgrade
+   ============================================================ */
+#loginScreen {
+  background: #000510 !important;
+}
+#loginScreen::before {
+  background: radial-gradient(ellipse 70% 60% at 15% 20%, rgba(0,80,255,0.25) 0%, transparent 55%) !important;
+  width: 100% !important; height: 100% !important;
+  border-radius: 0 !important;
+  top: 0 !important; right: 0 !important;
+  animation: loginOrbNew 8s ease-in-out infinite !important;
+}
+#loginScreen::after {
+  background: radial-gradient(ellipse 60% 50% at 85% 80%, rgba(80,0,255,0.2) 0%, transparent 55%) !important;
+  width: 100% !important; height: 100% !important;
+  border-radius: 0 !important;
+  bottom: 0 !important; left: 0 !important;
+  animation: loginOrbNew 11s ease-in-out infinite reverse !important;
+}
+@keyframes loginOrbNew {
+  0%,100% { opacity: 0.8; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.06); }
+}
+
+.login-card {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow:
+    0 0 0 1px rgba(0,150,255,0.15),
+    0 40px 100px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.1) !important;
+  backdrop-filter: blur(32px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+}
+.login-logo-icon {
+  background: linear-gradient(135deg, rgba(0,80,255,0.3), rgba(0,150,255,0.15)) !important;
+  border: 1px solid rgba(0,150,255,0.4) !important;
+  box-shadow: 0 0 30px rgba(0,100,255,0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+}
+.login-title {
+  font-family: 'Orbitron', 'Heebo', sans-serif !important;
+  background: linear-gradient(135deg, #fff 0%, #80ccff 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  letter-spacing: 4px !important;
+}
+.login-subtitle { color: rgba(180,210,255,0.7) !important; }
+.form-label { color: rgba(180,210,255,0.8) !important; }
+.form-input {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: #fff !important;
+  backdrop-filter: blur(8px) !important;
+}
+.form-input:focus {
+  border-color: rgba(0,150,255,0.6) !important;
+  box-shadow: 0 0 0 3px rgba(0,100,255,0.15), 0 0 16px rgba(0,150,255,0.2) !important;
+  background: rgba(0,80,255,0.06) !important;
+}
+.form-input::placeholder { color: rgba(255,255,255,0.3) !important; }
+.btn-primary {
+  background: linear-gradient(135deg, #0050ff, #0099ff) !important;
+  box-shadow: 0 4px 24px rgba(0,100,255,0.4), 0 0 0 1px rgba(0,150,255,0.3) !important;
+  border: none !important;
+}
+.btn-primary:active { transform: scale(0.98); }
+.login-first-time { color: rgba(180,210,255,0.6) !important; }
+.link-btn { color: rgba(100,180,255,0.9) !important; }
+
+/* AI Robot button */
+.ai-robot-btn {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-spring);
+}
+.ai-robot-btn:hover { transform: scale(1.08) translateY(-2px); }
+.ai-robot-btn:active { transform: scale(0.95); }
+.ai-robot-body {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #e8f4ff, #c8e8ff);
+  border-radius: 10px;
+  border: 2px solid rgba(0,120,255,0.3);
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0,100,255,0.25), inset 0 1px 0 rgba(255,255,255,0.8);
+  display: flex; align-items: center; justify-content: center;
+}
+.ai-robot-eyes {
+  display: flex; gap: 6px;
+}
+.ai-robot-eye {
+  width: 8px; height: 8px;
+  background: #0060ff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(0,100,255,0.8);
+  animation: eyeBlink 3s ease-in-out infinite;
+}
+.ai-robot-eye:nth-child(2) { animation-delay: 0.15s; }
+@keyframes eyeBlink {
+  0%,92%,100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.ai-robot-antenna {
+  width: 3px;
+  height: 10px;
+  background: linear-gradient(to top, #0060ff, #00aaff);
+  border-radius: 2px;
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.ai-robot-antenna::after {
+  content: '';
+  position: absolute;
+  top: -4px; left: 50%;
+  transform: translateX(-50%);
+  width: 6px; height: 6px;
+  background: #00aaff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0,170,255,0.9);
+  animation: antennaPulse 1.5s ease-in-out infinite;
+}
+@keyframes antennaPulse {
+  0%,100% { box-shadow: 0 0 6px rgba(0,170,255,0.7); }
+  50%      { box-shadow: 0 0 14px rgba(0,170,255,1); }
+}
+.ai-robot-flame {
+  width: 16px;
+  height: 18px;
+  margin-top: -2px;
+  background: linear-gradient(to top, #ff6b00, #ff9500, #ffcc00);
+  clip-path: polygon(50% 0%, 100% 60%, 75% 100%, 25% 100%, 0% 60%);
+  animation: flameDance 0.4s ease-in-out infinite alternate;
+  filter: drop-shadow(0 2px 6px rgba(255,120,0,0.7));
+}
+@keyframes flameDance {
+  from { transform: scaleX(0.85) scaleY(1); }
+  to   { transform: scaleX(1.15) scaleY(0.9); }
+}
+.ai-robot-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--primary);
+  text-transform: uppercase;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+/* ============================================================
+   MODULE SELECTOR 2030 — glass buttons + AI chips
+   ============================================================ */
+.ms-module-btn-2030 {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 16px 18px;
+  cursor: pointer;
+  font-family: 'Heebo', sans-serif;
+  text-align: right;
+  transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 0 0 1px rgba(0,150,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.ms-module-btn-2030:hover {
+  background: rgba(0,80,255,0.12);
+  border-color: rgba(0,150,255,0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,80,255,0.15);
+}
+.ms-module-btn-2030:active { transform: scale(0.98); }
+
+.ai-chip {
+  background: rgba(0,100,255,0.1);
+  border: 1px solid rgba(0,150,255,0.2);
+  border-radius: 20px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(180,210,255,0.85);
+  cursor: pointer;
+  font-family: 'Heebo', sans-serif;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.ai-chip:hover {
+  background: rgba(0,100,255,0.2);
+  border-color: rgba(0,150,255,0.4);
+  color: white;
+}
+
+/* Stats pills for module selector */
+#msStatsRow .ms-stat-pill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 10px 6px;
+}
+#msStatsRow .ms-stat-pill .stat-ico { font-size: 16px; }
+#msStatsRow .ms-stat-pill .stat-num {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+#msStatsRow .ms-stat-pill .stat-lbl {
+  font-size: 10px;
+  color: rgba(180,210,255,0.5);
+  letter-spacing: 0.5px;
 }

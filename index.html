@@ -15,16 +15,25 @@
 
 </head>
 <body>
-<!-- ===== DAZURA SPLASH SCREEN ===== -->
+<!-- ===== DAZURA SPLASH SCREEN 2030 ===== -->
 <div id="dazura-splash">
   <div class="dazura-container">
+    <!-- Glowing ring with icon -->
+    <div class="dazura-ring">
+      <div class="dazura-ring-inner">🏖️</div>
+    </div>
+    <!-- Logo -->
     <div class="dazura-logo" id="dazuraTitle">Dazura</div>
-    <div class="dazura-sub" id="dazuraCompany"></div>
+    <div class="dazura-sub" id="dazuraCompany">Smart Workforce Platform</div>
+    <!-- Slim loader bar -->
+    <div class="dazura-loader"></div>
+    <div class="dazura-status" id="dazuraStatus">מתחבר...</div>
+    <!-- Live stats cards -->
     <div class="dazura-stats" id="dazuraStats">
       <div class="dazura-stat">
         <span class="dazura-stat-icon">🏖️</span>
         <span class="dazura-stat-num" id="dazNum0">0</span>
-        <span class="dazura-stat-label">בחופשה</span>
+        <span class="dazura-stat-label">חופשה</span>
       </div>
       <div class="dazura-stat">
         <span class="dazura-stat-icon">🏠</span>
@@ -37,14 +46,13 @@
         <span class="dazura-stat-label">מחלה</span>
       </div>
     </div>
-    <div class="dazura-loader"></div>
   </div>
 </div>
 
 
 
 
-<!-- ===== LOGIN SCREEN ===== -->
+<!-- ===== LOGIN SCREEN 2030 ===== -->
 <div id="loginScreen" class="screen active">
   <div class="login-card">
     <div class="login-logo">
@@ -65,6 +73,24 @@
       <span>כניסה למערכת</span>
       <span>←</span>
     </button>
+
+    <!-- Biometric login -->
+    <div id="biometricSection" style="display:none;text-align:center;margin-top:18px;">
+      <div style="font-size:11px;color:rgba(180,210,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">— או התחבר ביומטרית —</div>
+      <div style="display:flex;gap:16px;justify-content:center;align-items:center;">
+        <button id="fingerprintBtn" onclick="doBiometricLogin('fingerprint')" title="טביעת אצבע"
+          style="display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(0,100,255,0.1);border:1px solid rgba(0,150,255,0.25);border-radius:16px;padding:14px 20px;cursor:pointer;color:rgba(180,210,255,0.9);font-family:'Heebo',sans-serif;font-size:11px;letter-spacing:1px;transition:all 0.2s;backdrop-filter:blur(8px);">
+          <span style="font-size:28px;filter:drop-shadow(0 0 8px rgba(0,150,255,0.6));">🫆</span>
+          <span>טביעת אצבע</span>
+        </button>
+        <button id="faceIdBtn" onclick="doBiometricLogin('face')" title="זיהוי פנים"
+          style="display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(0,100,255,0.1);border:1px solid rgba(0,150,255,0.25);border-radius:16px;padding:14px 20px;cursor:pointer;color:rgba(180,210,255,0.9);font-family:'Heebo',sans-serif;font-size:11px;letter-spacing:1px;transition:all 0.2s;backdrop-filter:blur(8px);">
+          <span style="font-size:28px;filter:drop-shadow(0 0 8px rgba(0,150,255,0.6));">🪪</span>
+          <span>זיהוי פנים</span>
+        </button>
+      </div>
+    </div>
+
     <div class="login-first-time">
       כניסה ראשונה? <button class="link-btn" onclick="showRegister()">הירשם כאן</button>
       &nbsp;·&nbsp;
@@ -206,7 +232,45 @@
         <div id="ceoBurnoutText" style="font-size:13px;color:white;font-weight:600;line-height:1.7;overflow-y:auto;flex:1;white-space:pre-line;"></div>
       </div>
 
-      <!-- Card 5: Actions -->
+      <!-- Card 5: AI Chat -->
+      <div id="ceoAiCard" style="flex:3;min-height:0;background:linear-gradient(135deg,rgba(5,10,30,0.97),rgba(0,15,50,0.99));border:1px solid rgba(0,150,255,0.2);border-radius:14px;padding:14px;display:flex;flex-direction:column;box-shadow:0 0 30px rgba(0,80,255,0.08);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="ai-robot-body" style="width:28px;height:28px;flex-shrink:0;">
+              <div class="ai-robot-antenna" style="height:7px;top:-7px;"></div>
+              <div class="ai-robot-eyes"><div class="ai-robot-eye" style="width:5px;height:5px;"></div><div class="ai-robot-eye" style="width:5px;height:5px;"></div></div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:rgba(100,180,255,0.9);letter-spacing:1px;text-transform:uppercase;">AI Assistant — מנכ"ל</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.3);">שאל שאלה חופשית על הצוות</div>
+            </div>
+          </div>
+          <button onclick="clearCeoAiChat()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:3px 8px;font-size:10px;color:rgba(255,255,255,0.4);cursor:pointer;font-family:'Heebo',sans-serif;">נקה</button>
+        </div>
+        <!-- Messages -->
+        <div id="ceoAiMessages" style="flex:1;overflow-y:auto;margin-bottom:8px;min-height:70px;"></div>
+        <!-- Quick chips -->
+        <div id="ceoAiChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;flex-shrink:0;">
+          <button onclick="sendCeoAiQuery('מי בחופשה היום?')" class="ai-chip">🏖️ חופשה היום</button>
+          <button onclick="sendCeoAiQuery('מי עובד מהבית היום?')" class="ai-chip">🏠 WFH היום</button>
+          <button onclick="sendCeoAiQuery('מי בסיכון שחיקה?')" class="ai-chip">🔥 שחיקה</button>
+          <button onclick="sendCeoAiQuery('עלויות חופשות רבעוני')" class="ai-chip">💰 עלויות רבעון</button>
+          <button onclick="sendCeoAiQuery('חיסכון WFH שנתי')" class="ai-chip">📈 חיסכון שנתי</button>
+          <button onclick="sendCeoAiQuery('חזה שבועות עמוסים')" class="ai-chip">📅 חיזוי עומס</button>
+        </div>
+        <!-- Input -->
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <input id="ceoAiInput" type="text" placeholder="שאל שאלה חופשית..." dir="rtl"
+            style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(0,150,255,0.25);border-radius:10px;padding:9px 12px;font-size:13px;color:white;font-family:'Heebo',sans-serif;outline:none;"
+            onkeydown="if(event.key==='Enter')sendCeoAiQuery()"
+            onfocus="this.style.borderColor='rgba(0,150,255,0.6)'"
+            onblur="this.style.borderColor='rgba(0,150,255,0.25)'">
+          <button onclick="sendCeoAiQuery()"
+            style="background:linear-gradient(135deg,#0050ff,#0099ff);border:none;border-radius:10px;padding:9px 14px;font-size:16px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 12px rgba(0,100,255,0.3);">→</button>
+        </div>
+      </div>
+
+      <!-- Card 6: Actions -->
       <div style="flex-shrink:0;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:12px;">
         <div style="display:flex;gap:8px;">
           <button onclick="openCeoAnnouncementsModal()" style="flex:1;background:rgba(255,255,255,0.07);color:white;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:11px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Heebo',sans-serif;">📢 הודעות</button>
@@ -501,86 +565,105 @@
 
 <!-- ===== MODULE SELECTOR SCREEN ===== -->
 <div id="moduleSelectorScreen" class="screen">
-  <div style="height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;position:relative;">
+  <div style="height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;position:relative;background:#000510;">
 
-    <!-- Background orbs -->
-    <div class="ms-bg-orb ms-bg-orb-1"></div>
-    <div class="ms-bg-orb ms-bg-orb-2"></div>
-    <div class="ms-bg-orb ms-bg-orb-3"></div>
-
-    <!-- Top bar -->
-    <div class="ms-topbar">
-      <button onclick="doLogout()" class="ms-logout-btn">🚪 התנתק</button>
+    <!-- 2030 Background — same as login -->
+    <div style="position:absolute;inset:0;pointer-events:none;z-index:0;">
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 20% 30%,rgba(0,80,255,0.18) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 80% 70%,rgba(100,0,255,0.15) 0%,transparent 55%);animation:nebulaShift 8s ease-in-out infinite alternate;"></div>
+      <div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.1) 1px,transparent 1px);background-size:48px 48px;animation:gridDrift 20s linear infinite;opacity:0.3;"></div>
     </div>
 
-    <!-- Scrollable center content -->
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:0 20px 28px;overflow-y:auto;position:relative;z-index:2;">
+    <!-- Top bar -->
+    <div style="position:relative;z-index:2;padding:max(env(safe-area-inset-top),14px) 20px 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div id="moduleBrandIcon" style="font-size:22px;filter:drop-shadow(0 0 8px rgba(0,150,255,0.6));">🏖️</div>
+        <img id="moduleLogoImg" style="display:none;height:28px;object-fit:contain;" src="" alt="">
+        <div>
+          <div id="moduleCompanyName" style="font-family:'Orbitron','Heebo',sans-serif;font-size:13px;font-weight:700;background:linear-gradient(135deg,#fff,#80ccff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:2px;"></div>
+        </div>
+      </div>
+      <button onclick="doLogout()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);border-radius:20px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:'Heebo',sans-serif;backdrop-filter:blur(8px);">יציאה 🚪</button>
+    </div>
 
-      <!-- Hero -->
-      <div class="ms-hero">
-        <div class="ms-hero-card">
-          <div class="ms-hero-text">
-            <div id="moduleCompanyName" class="ms-hero-company"></div>
-            <div id="moduleWelcome" class="ms-hero-welcome">👋 שלום, </div>
-          </div>
-          <div id="moduleBrandIcon" class="ms-hero-icon">🏖️</div>
-          <img id="moduleLogoImg" class="ms-hero-logo" src="" alt="">
+    <!-- Scrollable content -->
+    <div style="flex:1;overflow-y:auto;position:relative;z-index:2;padding:16px 20px max(env(safe-area-inset-bottom),20px);display:flex;flex-direction:column;align-items:center;gap:14px;">
+
+      <!-- Welcome card — glass like login -->
+      <div style="width:100%;max-width:400px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:24px;padding:20px 24px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:0 0 0 1px rgba(0,150,255,0.1),0 20px 60px rgba(0,0,0,0.4);">
+        <div id="moduleWelcome" style="font-size:18px;font-weight:800;color:white;margin-bottom:14px;"></div>
+        <!-- Stats row -->
+        <div id="msStatsRow" style="display:flex;gap:8px;">
+          <!-- Populated by JS -->
         </div>
       </div>
 
-      <!-- Stats row -->
-      <div class="ms-stats-row" id="msStatsRow" style="width:100%;max-width:360px;">
-        <!-- Populated by JS -->
-      </div>
+      <!-- Action buttons — 2030 glass style -->
+      <div style="width:100%;max-width:400px;display:flex;flex-direction:column;gap:10px;">
 
-      <!-- Module buttons -->
-      <div style="width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px;">
-
-        <button onclick="enterModule('timeclock')" class="ms-module-btn">
-          <div class="ms-btn-icon">⏱️</div>
+        <button onclick="enterModule('timeclock')" class="ms-module-btn-2030">
+          <span style="font-size:22px;filter:drop-shadow(0 0 6px rgba(0,150,255,0.5));">⏱️</span>
           <div style="text-align:right;flex:1;">
-            <div class="ms-btn-title">דיווח שעות יומי</div>
-            <div class="ms-btn-sub">דווח שעת כניסה ויציאה לעבודה</div>
+            <div style="font-size:14px;font-weight:700;color:white;">דיווח שעות יומי</div>
+            <div style="font-size:11px;color:rgba(180,210,255,0.6);margin-top:2px;">דווח שעת כניסה ויציאה</div>
           </div>
-          <div class="ms-btn-arrow">←</div>
+          <span style="color:rgba(0,150,255,0.7);font-size:18px;">←</span>
         </button>
 
-        <button onclick="enterModule('vacation')" class="ms-module-btn">
-          <div class="ms-btn-icon">🏖️</div>
+        <button onclick="enterModule('vacation')" class="ms-module-btn-2030">
+          <span style="font-size:22px;filter:drop-shadow(0 0 6px rgba(0,200,100,0.5));">🏖️</span>
           <div style="text-align:right;flex:1;">
-            <div class="ms-btn-title">ניהול חופשות</div>
-            <div class="ms-btn-sub">ניהול ימי חופשה, יתרות ובקשות</div>
+            <div style="font-size:14px;font-weight:700;color:white;">ניהול חופשות</div>
+            <div style="font-size:11px;color:rgba(180,210,255,0.6);margin-top:2px;">יתרות, בקשות ולוח שנה</div>
           </div>
-          <div class="ms-btn-arrow">←</div>
+          <span style="color:rgba(0,150,255,0.7);font-size:18px;">←</span>
         </button>
 
-        <button onclick="openSickTodayFromSelector()" id="sickTodayModuleBtn" class="ms-module-btn danger-btn">
-          <div class="ms-btn-icon">🤒</div>
-          <div style="text-align:right;flex:1;">
-            <div class="ms-btn-title">מי חולה היום</div>
-            <div id="sickTodayModuleCount" class="ms-btn-sub">לחץ לצפייה ודיווח מחלה</div>
-          </div>
-          <div class="ms-btn-arrow">←</div>
-        </button>
-
-        <button onclick="openWhereIsEmployee()" class="ms-module-btn">
-          <div class="ms-btn-icon">🔍</div>
-          <div style="text-align:right;flex:1;">
-            <div class="ms-btn-title">איפה כולם היום?</div>
-            <div class="ms-btn-sub">חפש עובד וראה היכן הוא</div>
-          </div>
-          <div class="ms-btn-arrow">←</div>
-        </button>
-
-        <!-- Send announcement button — visible only to authorized -->
-        <div id="moduleSendAnnBtn" style="display:none;">
-          <button onclick="openCeoMessage()" class="ms-module-btn primary-btn" style="width:100%;">
-            <div class="ms-btn-icon">📢</div>
-            <div style="text-align:right;flex:1;">
-              <div class="ms-btn-title">שלח הודעה לצוות</div>
-              <div class="ms-btn-sub" style="color:rgba(255,255,255,0.7);">שלח כל זה לכל העובדים</div>
+        <!-- AI Assistant card — replaces sick+whereIs buttons -->
+        <div style="background:rgba(0,40,120,0.25);border:1px solid rgba(0,150,255,0.25);border-radius:18px;padding:16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 0 20px rgba(0,80,255,0.08);">
+          <!-- Robot header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="ai-robot-body" style="width:30px;height:30px;flex-shrink:0;">
+                <div class="ai-robot-antenna" style="height:8px;top:-8px;"></div>
+                <div class="ai-robot-eyes"><div class="ai-robot-eye" style="width:6px;height:6px;"></div><div class="ai-robot-eye" style="width:6px;height:6px;"></div></div>
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:rgba(100,180,255,0.9);letter-spacing:1px;">AI Assistant</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.3);">שאל שאלה על הצוות</div>
+              </div>
             </div>
-            <div class="ms-btn-arrow">←</div>
+            <button onclick="clearModuleAiChat()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:3px 8px;font-size:10px;color:rgba(255,255,255,0.35);cursor:pointer;font-family:'Heebo',sans-serif;">נקה</button>
+          </div>
+          <!-- Chat messages -->
+          <div id="moduleAiMessages" style="min-height:60px;max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+          <!-- Quick chips -->
+          <div id="moduleAiChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+            <button onclick="sendModuleAiQuery('מי בחופשה היום?')" class="ai-chip">🏖️ חופשה היום</button>
+            <button onclick="sendModuleAiQuery('מי חולה היום?')" class="ai-chip">🤒 חולה היום</button>
+            <button onclick="sendModuleAiQuery('מי עובד מהבית היום?')" class="ai-chip">🏠 WFH היום</button>
+            <button onclick="sendModuleAiQuery('כמה עובדים במשרד?')" class="ai-chip">🏢 במשרד</button>
+          </div>
+          <!-- Input -->
+          <div style="display:flex;gap:8px;">
+            <input id="moduleAiInput" type="text" placeholder="שאל שאלה חופשית..." dir="rtl"
+              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:9px 12px;font-size:13px;color:white;font-family:'Heebo',sans-serif;outline:none;"
+              onkeydown="if(event.key==='Enter')sendModuleAiQuery()"
+              onfocus="this.style.borderColor='rgba(0,150,255,0.55)'"
+              onblur="this.style.borderColor='rgba(0,150,255,0.2)'">
+            <button onclick="sendModuleAiQuery()"
+              style="background:linear-gradient(135deg,#0050ff,#0099ff);border:none;border-radius:10px;padding:9px 14px;font-size:16px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 12px rgba(0,100,255,0.3);">→</button>
+          </div>
+        </div>
+
+        <!-- Send announcement — authorized only -->
+        <div id="moduleSendAnnBtn" style="display:none;">
+          <button onclick="openCeoMessage()" class="ms-module-btn-2030" style="border-color:rgba(0,200,100,0.3);background:rgba(0,80,50,0.3);">
+            <span style="font-size:22px;">📢</span>
+            <div style="text-align:right;flex:1;">
+              <div style="font-size:14px;font-weight:700;color:white;">שלח הודעה לצוות</div>
+              <div style="font-size:11px;color:rgba(180,255,200,0.6);margin-top:2px;">לכל העובדים</div>
+            </div>
+            <span style="color:rgba(0,200,100,0.7);font-size:18px;">←</span>
           </button>
         </div>
 
@@ -589,6 +672,9 @@
 
   </div>
 </div>
+<!-- Hidden elements kept for JS compatibility -->
+<div id="sickTodayModuleBtn" style="display:none;"></div>
+<div id="sickTodayModuleCount" style="display:none;"></div>
 
 <!-- ===== TIME CLOCK SCREEN ===== -->
 <div id="timeClockScreen" class="screen">

@@ -464,6 +464,132 @@ function dateToStr(y, m, d) {
 // AUTH STATE
 // ============================================================
 
+// ============================================================
+// 🫆 BIOMETRIC LOGIN — WebAuthn / Face ID / Fingerprint
+// ============================================================
+async function initBiometricSection() {
+  const section = document.getElementById('biometricSection');
+  if (!section) return;
+  // Show biometric buttons only if WebAuthn is available
+  if (window.PublicKeyCredential) {
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
+    if (available) {
+      section.style.display = 'block';
+    }
+  }
+}
+
+async function doBiometricLogin(type) {
+  const btn = document.getElementById(type === 'fingerprint' ? 'fingerprintBtn' : 'faceIdBtn');
+  const origHtml = btn ? btn.innerHTML : '';
+  try {
+    if (btn) {
+      btn.innerHTML = `<span style="font-size:28px;">⏳</span><span>מאמת...</span>`;
+      btn.disabled = true;
+    }
+
+    // Check for stored biometric credential
+    const storedCred = localStorage.getItem('dazura_biometric_user');
+    if (!storedCred) {
+      showToast('⚠️ אין פרטי ביומטריה שמורים — התחבר תחילה עם סיסמה', 'warning', 4000);
+      if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+      return;
+    }
+
+    const { username, credentialId } = JSON.parse(storedCred);
+
+    // WebAuthn assertion (real device will prompt fingerprint/face)
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        rpId: location.hostname || 'localhost',
+        allowCredentials: credentialId ? [{
+          id: Uint8Array.from(atob(credentialId), c => c.charCodeAt(0)),
+          type: 'public-key'
+        }] : [],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+
+    if (assertion) {
+      // Verified — log in the stored user
+      const db = getDB();
+      const user = db.users[username];
+      if (!user) throw new Error('User not found');
+      currentUser = user;
+      hideLoginError();
+      document.getElementById('loginScreen').classList.remove('active');
+      showModuleSelector();
+      showToast(`✅ ברוך הבא, ${user.fullName}!`, 'success');
+    }
+  } catch (err) {
+    if (err.name === 'NotAllowedError') {
+      showToast('❌ אימות בוטל', 'warning', 3000);
+    } else {
+      showToast('⚠️ ' + (err.message || 'שגיאת אימות ביומטרי'), 'warning', 4000);
+    }
+  } finally {
+    if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+  }
+}
+
+async function registerBiometric() {
+  if (!currentUser) return;
+  if (!window.PublicKeyCredential) {
+    showToast('⚠️ הדפדפן לא תומך בביומטריה', 'warning'); return;
+  }
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = new TextEncoder().encode(currentUser.username);
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'Dazura', id: location.hostname || 'localhost' },
+        user: { id: userId, name: currentUser.username, displayName: currentUser.fullName },
+        pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+        timeout: 60000
+      }
+    });
+    if (cred) {
+      const credId = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+      localStorage.setItem('dazura_biometric_user', JSON.stringify({
+        username: currentUser.username, credentialId: credId
+      }));
+      showToast('✅ ביומטריה נרשמה בהצלחה!', 'success');
+    }
+  } catch(err) {
+    if (err.name !== 'NotAllowedError') showToast('⚠️ לא ניתן לרשום ביומטריה', 'warning');
+  }
+}
+
+// Initialize biometric on page load
+document.addEventListener('DOMContentLoaded', () => {
+  initBiometricSection();
+});
+
+// ============================================================
+// 🤖 AI ROBOT BUTTON — render helper
+// ============================================================
+function renderAIRobotBtn(containerId, label, onClick) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `
+    <div class="ai-robot-btn" onclick="${onClick}" title="${label}">
+      <div class="ai-robot-body">
+        <div class="ai-robot-antenna"></div>
+        <div class="ai-robot-eyes">
+          <div class="ai-robot-eye"></div>
+          <div class="ai-robot-eye"></div>
+        </div>
+      </div>
+      <div class="ai-robot-flame"></div>
+      <div class="ai-robot-label">${label}</div>
+    </div>`;
+}
+
 function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
@@ -3402,6 +3528,7 @@ function showCeoDashboard() {
   document.getElementById('ceoDashboardScreen').classList.add('active');
   loadTheme();
   populateCeoDashboard();
+  setTimeout(() => initCeoAiChat(), 300);
   setTimeout(checkBirthdays, 800);
   // Check handover for tomorrow's vacationers
   checkHandoverNeeded();
@@ -3527,6 +3654,239 @@ function populateCeoDashboard() {
   } else {
     document.getElementById('ceoBurnoutText').textContent = '✅ כל העובדים לקחו חופשה ב-90 הימים האחרונים';
   }
+}
+
+// ============================================================
+// 🤖 CEO AI CHAT — שאילתות בשפה טבעית + חיסכון עלויות
+// ============================================================
+const ceoAiHistory = [];
+
+function initCeoAiChat() {
+  const chatEl = document.getElementById('ceoAiChat');
+  if (!chatEl) return;
+  // Already initialized
+  if (chatEl.dataset.initialized) return;
+  chatEl.dataset.initialized = '1';
+  renderCeoAiMessages();
+}
+
+function renderCeoAiMessages() {
+  const container = document.getElementById('ceoAiMessages');
+  if (!container) return;
+  const chips = document.getElementById('ceoAiChips');
+
+  if (ceoAiHistory.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:14px 8px;opacity:0.65;">
+        <div style="font-size:11px;color:rgba(180,210,255,0.7);">בחר שאלה מהירה למעלה או הקלד שאלה חופשית</div>
+      </div>`;
+    if (chips) chips.style.display = 'flex';
+    return;
+  }
+  if (chips) chips.style.display = 'none';
+  container.innerHTML = ceoAiHistory.map(msg =>
+    '<div style="display:flex;flex-direction:column;align-items:' + (msg.role==='user'?'flex-end':'flex-start') + ';margin-bottom:8px;">' +
+    '<div style="max-width:92%;background:' + (msg.role==='user'?'rgba(0,80,255,0.65)':'rgba(255,255,255,0.07)') + ';color:white;border-radius:' + (msg.role==='user'?'12px 12px 3px 12px':'12px 12px 12px 3px') + ';padding:9px 13px;font-size:12px;line-height:1.6;white-space:pre-wrap;border:1px solid ' + (msg.role==='user'?'rgba(0,150,255,0.3)':'rgba(255,255,255,0.08)') + ';">' +
+    msg.content + '</div></div>'
+  ).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+function sendCeoAiQuery(query) {
+  const input = document.getElementById('ceoAiInput');
+  const q = query || (input ? input.value.trim() : '');
+  if (!q) return;
+  if (input) input.value = '';
+
+  ceoAiHistory.push({ role: 'user', content: q });
+  renderCeoAiMessages();
+
+  // Show typing indicator
+  const container = document.getElementById('ceoAiMessages');
+  if (container) {
+    container.innerHTML += `<div id="ceoTyping" style="display:flex;align-items:flex-start;margin-bottom:10px;">
+      <div style="background:var(--surface2);border-radius:14px 14px 14px 4px;padding:10px 14px;font-size:13px;">
+        <span style="display:inline-flex;gap:4px;">
+          <span style="width:6px;height:6px;background:var(--text-muted);border-radius:50%;animation:typingDot 1.2s infinite 0s;display:inline-block;"></span>
+          <span style="width:6px;height:6px;background:var(--text-muted);border-radius:50%;animation:typingDot 1.2s infinite 0.2s;display:inline-block;"></span>
+          <span style="width:6px;height:6px;background:var(--text-muted);border-radius:50%;animation:typingDot 1.2s infinite 0.4s;display:inline-block;"></span>
+        </span>
+      </div>
+    </div>`;
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // Build AI data context
+  const answer = buildCeoAiAnswer(q);
+
+  setTimeout(() => {
+    const typing = document.getElementById('ceoTyping');
+    if (typing) typing.remove();
+    ceoAiHistory.push({ role: 'assistant', content: answer });
+    renderCeoAiMessages();
+  }, 700);
+}
+
+function buildCeoAiAnswer(q) {
+  const db = getDB();
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const allUsers = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
+  const vacs = db.vacations || {};
+  const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const ql = q.toLowerCase();
+
+
+  // ---- זיהוי שאלות מחוץ לתחום ----
+  const TOOL_KW = ["חופשה","חופש","חולה","מחלה","wfh","מהבית","עובד","עובדים","היום","השבוע","החודש","רבעון","שנה","שנתי","עלות","עלויות","חיסכון","שכר","מכסה","יתרה","מחלקה","שחיקה","חיזוי","עמוס","בקשה","אישור","נוכח","נעדר","כמה","מי ","רשימה","דוח","סיכום","צוות","כוח אדם","ימים","תקציב"];
+  const isToolRelated = TOOL_KW.some(kw => ql.includes(kw));
+  if (!isToolRelated) {
+    return "🤖 אני מתמחה אך ורק בנתוני מערכת Dazura.\n\nאני יכול לענות על:\n• מי בחופשה / WFH / חולה היום?\n• עלויות ונתוני חופשות (יומי / חודשי / רבעוני / שנתי)\n• חיזוי ימים עמוסים ומחסור כוח אדם\n• ניתוח שחיקה ורווחת עובדים\n\nשאלות שאינן קשורות לנתוני הצוות — אינן בתחום האחריות שלי.";
+  }
+  // ---- מי בחופשה / מחלה / WFH היום ----
+  if (ql.includes('היום') || ql.includes('עכשיו') || ql.includes('חופשה') || ql.includes('wfh') || ql.includes('מהבית') || ql.includes('מחלה')) {
+    const onVac=[], onWfh=[], onSick=[], present=[];
+    allUsers.forEach(u => {
+      const t = (vacs[u.username]||{})[todayStr];
+      const dept = Array.isArray(u.dept)?u.dept[0]:u.dept||'';
+      if (t==='full'||t==='half') onVac.push(`${u.fullName} (${dept})`);
+      else if (t==='wfh') onWfh.push(`${u.fullName} (${dept})`);
+      else if (t==='sick') onSick.push(`${u.fullName} (${dept})`);
+      else present.push(u.fullName);
+    });
+
+    if (ql.includes('wfh') || ql.includes('מהבית')) {
+      return onWfh.length
+        ? `🏠 עובדים מהבית היום (${onWfh.length}):\n${onWfh.join('\n')}`
+        : '🏠 אין עובדים שדיווחו על עבודה מהבית היום.';
+    }
+    if (ql.includes('מחלה')) {
+      return onSick.length
+        ? `🤒 בתאריך היום בדיווח מחלה (${onSick.length}):\n${onSick.join('\n')}`
+        : '🤒 אין דיווחי מחלה להיום.';
+    }
+    if (ql.includes('חופשה')) {
+      return onVac.length
+        ? `🏖️ בחופשה היום (${onVac.length}):\n${onVac.join('\n')}`
+        : '✅ אין עובדים בחופשה היום.';
+    }
+    // Summary
+    let ans = `📊 סטטוס צוות לתאריך היום:\n`;
+    ans += `• 🏖️ בחופשה: ${onVac.length}${onVac.length ? ' — '+onVac.join(', ') : ''}\n`;
+    ans += `• 🏠 WFH: ${onWfh.length}${onWfh.length ? ' — '+onWfh.join(', ') : ''}\n`;
+    ans += `• 🤒 מחלה: ${onSick.length}${onSick.length ? ' — '+onSick.join(', ') : ''}\n`;
+    ans += `• ✅ במשרד: ${present.length}`;
+    return ans;
+  }
+
+  // ---- חיסכון WFH / עלויות ----
+  if (ql.includes('חיסכון') || ql.includes('עלות') || ql.includes('עלויות') || ql.includes('כסף') || ql.includes('שכר')) {
+    const getPeriod = () => {
+      if (ql.includes('שנת') || ql.includes('שנה') || ql.includes('שנתי')) return { label: 'שנה', months: 12, year: today.getFullYear(), from: 1, to: 12 };
+      if (ql.includes('רבעון') || ql.includes('רבעוני') || ql.includes('quarter')) {
+        const q = Math.floor(today.getMonth()/3);
+        const from = q*3+1, to = Math.min(q*3+3, 12);
+        return { label: `רבעון ${q+1}`, months: 3, year: today.getFullYear(), from, to };
+      }
+      if (ql.includes('שבוע')) return { label: 'שבוע', months: 0, week: true };
+      return { label: 'חודש', months: 1, year: today.getFullYear(), from: today.getMonth()+1, to: today.getMonth()+1 };
+    };
+    const period = getPeriod();
+
+    let totalVacCost = 0, totalVacDays = 0, totalWfhDays = 0, totalWfhSave = 0;
+    allUsers.forEach(u => {
+      const salary = u.dailySalary || 850;
+      const uvacs = vacs[u.username] || {};
+      Object.entries(uvacs).forEach(([dt, type]) => {
+        const d = new Date(dt+'T00:00:00');
+        if (d.getFullYear() !== period.year) return;
+        const m = d.getMonth()+1;
+        if (m < period.from || m > period.to) return;
+        if (type==='full')  { totalVacDays++; totalVacCost += salary; }
+        else if (type==='half') { totalVacDays += 0.5; totalVacCost += salary*0.5; }
+        else if (type==='wfh') { totalWfhDays++; totalWfhSave += salary*0.3; }
+      });
+    });
+
+    return `💰 ניתוח עלויות — ${period.label}:\n\n` +
+      `🏖️ ימי חופשה: ${totalVacDays}\n` +
+      `   עלות ישירה: ₪${Math.round(totalVacCost).toLocaleString()}\n\n` +
+      `🏠 ימי WFH: ${totalWfhDays}\n` +
+      `   חיסכון משוער (נסיעות+חשמל+מקום): ₪${Math.round(totalWfhSave).toLocaleString()}\n\n` +
+      `📈 מאזן נטו: ${totalWfhSave > totalVacCost ? '✅' : '⚠️'} ₪${Math.abs(Math.round(totalWfhSave - totalVacCost)).toLocaleString()} ${totalWfhSave > totalVacCost ? 'לטובת החברה' : 'לחובת החברה'}`;
+  }
+
+  // ---- חיזוי ימים עמוסים ----
+  if (ql.includes('חזה') || ql.includes('חיזוי') || ql.includes('עמוס') || ql.includes('הבא') || ql.includes('ניבוי')) {
+    const weeks = [];
+    for (let w=0; w<4; w++) {
+      const ws = new Date(today);
+      ws.setDate(today.getDate() + w*7 + (1 - today.getDay()));
+      const dates = Array.from({length:5}, (_,i) => {
+        const d = new Date(ws); d.setDate(ws.getDate()+i);
+        return d.toISOString().slice(0,10);
+      });
+      let absTotal=0, wfhTotal=0;
+      allUsers.forEach(u => {
+        dates.forEach(dt => {
+          const t = (vacs[u.username]||{})[dt];
+          if (t==='full'||t==='half') absTotal++;
+          else if (t==='wfh') wfhTotal++;
+        });
+      });
+      const pct = allUsers.length > 0 ? Math.round((absTotal/(allUsers.length*5))*100) : 0;
+      weeks.push({ label: `שבוע ${ws.getDate()}/${ws.getMonth()+1}`, pct, absTotal, wfhTotal });
+    }
+    const sorted = [...weeks].sort((a,b) => b.pct - a.pct);
+    return `📅 חיזוי עומס 4 שבועות קדימה:\n\n` +
+      weeks.map(w => {
+        const bar = '█'.repeat(Math.round(w.pct/10)) + '░'.repeat(10-Math.round(w.pct/10));
+        const emoji = w.pct>=40?'🔴':w.pct>=20?'🟡':'🟢';
+        return `${emoji} ${w.label}\n   ${bar} ${w.pct}% היעדרויות (${w.absTotal} ימים, ${w.wfhTotal} WFH)`;
+      }).join('\n\n') +
+      `\n\n💡 שבוע עמוס ביותר: ${sorted[0].label} (${sorted[0].pct}%)\n💡 שבוע שקט ביותר: ${sorted[sorted.length-1].label} (${sorted[sorted.length-1].pct}%)`;
+  }
+
+  // ---- שחיקה ----
+  if (ql.includes('שחיקה') || ql.includes('לא לקח') || ql.includes('סיכון') || ql.includes('עייפות')) {
+    const ninetyAgo = new Date(today); ninetyAgo.setDate(ninetyAgo.getDate()-90);
+    const atRisk = allUsers.filter(u => {
+      const uvacs = vacs[u.username] || {};
+      return Object.entries(uvacs).filter(([dt,t]) => new Date(dt)>=ninetyAgo && (t==='full'||t==='half')).length === 0;
+    });
+    return atRisk.length
+      ? `🚨 ${atRisk.length} עובדים ללא חופשה ב-90 יום האחרונים:\n${atRisk.map(u=>`• ${u.fullName} (${Array.isArray(u.dept)?u.dept[0]:u.dept})`).join('\n')}\n\n💡 מומלץ: שיחה אישית ותזמון חופשה בתיאום`
+      : '✅ כל העובדים לקחו חופשה ב-90 הימים האחרונים — אין סיכון שחיקה מיידי.';
+  }
+
+  // ---- רשימת WFH שבוע ----
+  if (ql.includes('שבוע')) {
+    const days = Array.from({length:7}, (_,i) => {
+      const d = new Date(today); d.setDate(today.getDate()+i);
+      return d.toISOString().slice(0,10);
+    });
+    const wfhThisWeek = new Set();
+    allUsers.forEach(u => {
+      days.forEach(dt => {
+        if ((vacs[u.username]||{})[dt]==='wfh') wfhThisWeek.add(u.fullName);
+      });
+    });
+    return wfhThisWeek.size
+      ? `🏠 עובדים שדיווחו על WFH השבוע (${wfhThisWeek.size}):\n${[...wfhThisWeek].join('\n')}`
+      : '🏠 אין עובדים שדיווחו על WFH השבוע.';
+  }
+
+  // ---- Default fallback ----
+  const todayVac = allUsers.filter(u => {const t=(vacs[u.username]||{})[todayStr]; return t==='full'||t==='half';}).length;
+  const todayWfh = allUsers.filter(u => (vacs[u.username]||{})[todayStr]==='wfh').length;
+  return `🤖 הנה סיכום מהיר:\n• עובדים פעילים: ${allUsers.length}\n• בחופשה היום: ${todayVac}\n• WFH היום: ${todayWfh}\n• במשרד: ${allUsers.length - todayVac - todayWfh}\n\nנסה לשאול שאלה ספציפית כמו:\n"מי בחופשה השבוע?" / "כמה חסכנו ב-WFH?" / "חזה חודש הבא"`;
+}
+
+function clearCeoAiChat() {
+  ceoAiHistory.length = 0;
+  const chatEl = document.getElementById('ceoAiChat');
+  if (chatEl) chatEl.dataset.initialized = '';
+  renderCeoAiMessages();
 }
 
 function openCeoDayView() {
@@ -4706,57 +5066,117 @@ function renderEmployeeScores() {
 
 // ============================================================
 
+// ============================================================
+// 🤖 MODULE SELECTOR AI CHAT
+// ============================================================
+const moduleAiHistory = [];
+
+function clearModuleAiChat() {
+  moduleAiHistory.length = 0;
+  renderModuleAiMessages();
+}
+
+function renderModuleAiMessages() {
+  const container = document.getElementById('moduleAiMessages');
+  if (!container) return;
+  const chips = document.getElementById('moduleAiChips');
+
+  if (moduleAiHistory.length === 0) {
+    container.innerHTML = `<div style="text-align:center;padding:10px 4px;opacity:0.6;">
+      <div style="font-size:12px;color:rgba(180,210,255,0.7);">שאל אותי על הצוות — לדוגמה: "מי בחופשה היום?"</div>
+    </div>`;
+    if (chips) chips.style.display = 'flex';
+    return;
+  }
+  if (chips) chips.style.display = 'none';
+  container.innerHTML = moduleAiHistory.map(msg => `
+    <div style="display:flex;flex-direction:column;align-items:${msg.role==='user'?'flex-end':'flex-start'};margin-bottom:8px;">
+      <div style="max-width:92%;background:${msg.role==='user'?'rgba(0,80,255,0.7)':'rgba(255,255,255,0.08)'};color:white;border-radius:${msg.role==='user'?'12px 12px 3px 12px':'12px 12px 12px 3px'};padding:8px 12px;font-size:12px;line-height:1.5;white-space:pre-wrap;border:1px solid ${msg.role==='user'?'rgba(0,150,255,0.3)':'rgba(255,255,255,0.08)'};">
+        ${msg.content}
+      </div>
+    </div>`).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+function sendModuleAiQuery(query) {
+  const input = document.getElementById('moduleAiInput');
+  const q = query || (input ? input.value.trim() : '');
+  if (!q) return;
+  if (input) input.value = '';
+
+  moduleAiHistory.push({ role: 'user', content: q });
+  renderModuleAiMessages();
+
+  const container = document.getElementById('moduleAiMessages');
+  if (container) {
+    container.innerHTML += `<div id="modTyping" style="display:flex;align-items:flex-start;margin-bottom:8px;">
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px 12px 12px 3px;padding:8px 12px;border:1px solid rgba(255,255,255,0.08);">
+        <span style="display:inline-flex;gap:4px;">
+          <span style="width:5px;height:5px;background:rgba(180,210,255,0.6);border-radius:50%;animation:typingDot 1.2s infinite 0s;display:inline-block;"></span>
+          <span style="width:5px;height:5px;background:rgba(180,210,255,0.6);border-radius:50%;animation:typingDot 1.2s infinite 0.2s;display:inline-block;"></span>
+          <span style="width:5px;height:5px;background:rgba(180,210,255,0.6);border-radius:50%;animation:typingDot 1.2s infinite 0.4s;display:inline-block;"></span>
+        </span>
+      </div>
+    </div>`;
+    container.scrollTop = container.scrollHeight;
+  }
+
+  setTimeout(() => {
+    const typing = document.getElementById('modTyping');
+    if (typing) typing.remove();
+    const answer = buildCeoAiAnswer(q); // reuse same engine
+    moduleAiHistory.push({ role: 'assistant', content: answer });
+    renderModuleAiMessages();
+  }, 600);
+}
+
 function showModuleSelector() {
   ['loginScreen','appScreen','timeClockScreen','ceoDashboardScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
   });
 
-  // CEO user gets special dashboard
-  if (isCeoUser()) {
-    showCeoDashboard();
-    return;
-  }
+  if (isCeoUser()) { showCeoDashboard(); return; }
 
   const s = getSettings();
   const logoImg  = document.getElementById('moduleLogoImg');
   const logoIcon = document.getElementById('moduleBrandIcon');
   if (s.companyLogo) {
-    logoImg.src = s.companyLogo; logoImg.style.display = 'block';
-    logoIcon.style.display = 'none';
+    if (logoImg) { logoImg.src = s.companyLogo; logoImg.style.display = 'block'; }
+    if (logoIcon) logoIcon.style.display = 'none';
   } else {
-    logoImg.style.display = 'none'; logoIcon.style.display = '';
+    if (logoImg) logoImg.style.display = 'none';
+    if (logoIcon) logoIcon.style.display = '';
   }
   const cnEl = document.getElementById('moduleCompanyName');
-  if (cnEl && s.companyName) cnEl.textContent = s.companyName;
+  if (cnEl && s.companyName && s.companyName !== 'החברה שלי') cnEl.textContent = s.companyName;
   const wEl = document.getElementById('moduleWelcome');
-  if (wEl) wEl.innerHTML = `👋 שלום, ${currentUser.fullName}`;
+  if (wEl) wEl.innerHTML = '👋 שלום, ' + currentUser.fullName;
   document.getElementById('moduleSelectorScreen').classList.add('active');
   loadTheme();
   updateSickCount();
 
-  // Populate stats row
-  (function() {
-    try {
-      const db = getDB();
-      const users = Object.values(db.users || {}).filter(u => u.role !== 'admin' && u.status === 'active');
-      const today = new Date().toISOString().split('T')[0];
-      const sick = Object.values(db.sick || {}).filter(s => s.date === today).length;
-      const vacs = db.vacations || {};
-      const onVac = users.filter(u => vacs[u.username] && vacs[u.username][today]).length;
-      const statsEl = document.getElementById('msStatsRow');
-      if (statsEl) {
-        statsEl.innerHTML = `
-          <div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">${sick}</div><div class="stat-lbl">חולה</div></div>
-          <div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">${onVac}</div><div class="stat-lbl">בחופשה</div></div>
-          <div class="ms-stat-pill"><div class="stat-ico">👥</div><div class="stat-num">${users.length}</div><div class="stat-lbl">עובדים</div></div>
-        `;
-      }
-    } catch(e) {}
-  })();
-  // Show send announcement button for authorized users
+  try {
+    const db = getDB();
+    const users = Object.values(db.users || {}).filter(u => u.role !== 'admin' && u.status === 'active');
+    const today = new Date().toISOString().split('T')[0];
+    const sick  = Object.values(db.sick || {}).filter(s => s.date === today).length;
+    const vacs  = db.vacations || {};
+    const onVac = users.filter(u => { const t=(vacs[u.username]||{})[today]; return t==='full'||t==='half'; }).length;
+    const onWfh = users.filter(u => (vacs[u.username]||{})[today]==='wfh').length;
+    const statsEl = document.getElementById('msStatsRow');
+    if (statsEl) {
+      statsEl.innerHTML =
+        '<div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">'+sick+'</div><div class="stat-lbl">חולה</div></div>' +
+        '<div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">'+onVac+'</div><div class="stat-lbl">חופשה</div></div>' +
+        '<div class="ms-stat-pill"><div class="stat-ico">🏠</div><div class="stat-num">'+onWfh+'</div><div class="stat-lbl">WFH</div></div>' +
+        '<div class="ms-stat-pill"><div class="stat-ico">👥</div><div class="stat-num">'+users.length+'</div><div class="stat-lbl">עובדים</div></div>';
+    }
+  } catch(e) {}
+
+  renderModuleAiMessages();
+
   const sendBtn = document.getElementById('moduleSendAnnBtn');
   if (sendBtn) sendBtn.style.display = canSendAnnouncement() ? '' : 'none';
-  // Show announcement popup if any unseen
   setTimeout(renderAnnouncements, 700);
   setTimeout(checkBirthdays, 600);
   setTimeout(checkHandoverNeeded, 1500);
