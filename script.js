@@ -3649,46 +3649,31 @@ function saveHandover() {
   const t2 = document.getElementById('handover2').value.trim();
   const t3 = document.getElementById('handover3').value.trim();
   const contact = document.getElementById('handoverContact').value.trim();
-  const tasks = [t1, t2, t3].filter(Boolean);
-
-  if (!tasks.length) {
-    showToast('נא להזין לפחות משימה אחת', 'warning');
-    return;
-  }
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tasks = [t1,t2,t3].filter(Boolean);
+  if (!tasks.length) { showToast('נא להזין לפחות משימה אחת', 'warning'); return; }
 
   const db = getDB();
   if (!db.handovers) db.handovers = {};
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const dateHeb = tomorrow.toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
-  const key = currentUser.username + '_' + tomorrowStr;
+  // Find manager
+  const managerUsername = getDeptManagerForUser(currentUser.username);
+  const managerUser = managerUsername ? db.users[managerUsername] : null;
+  const managerName = managerUser?.fullName || 'המנהל';
+  const managerEmail = managerUser?.email || '';
 
-  // קביעת המנהל שאליו זה יגיע (לפי המחלקה של העובד)
-  const managerUsername = getDeptManagerForUser(currentUser.username) || 'admin';
-
-  db.handovers[key] = {
-    user: currentUser.username,
-    fullName: currentUser.fullName,
-    date: tomorrowStr,
-    tasks,
-    contact: contact || '',
-    createdAt: new Date().toISOString(),
-    seenByManager: false,           // חדש — ברירת מחדל: לא נקרא
-    managerUsername: managerUsername, // חדש — למי זה מיועד
-    status: 'pending'               // חדש — אפשר להרחיב בעתיד (approved/rejected)
+  db.handovers[currentUser.username + '_' + tomorrowStr] = {
+    user: currentUser.username, fullName: currentUser.fullName,
+    date: tomorrowStr, tasks, contact,
+    managerUsername, seenByManager: false,
+    createdAt: new Date().toISOString()
   };
-
   saveDB(db);
-
-  // עדכון לוג + הודעה
   closeModal('handoverModal');
-  showToast('✅ פרוטוקול העברת מקל נשמר ונשלח למנהל', 'success');
-  auditLog('handover_submitted', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
+  auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
 
-  // אופציונלי: אם תרצי — שליחת התראה פנימית (כרגע רק ב-DB)
-}
   // ── Build mailto ──
   const subject = encodeURIComponent(`📋 פרוטוקול העברת מקל — ${currentUser.fullName} (${dateHeb})`);
   let body = `שלום ${managerName},\n\n`;
@@ -6361,38 +6346,28 @@ function renderHandoverList() {
   }
 
   el.innerHTML = list.map(h => {
-  const dateHeb = new Date(h.date).toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
-  const isPast = h.date < today;
-  const isNew  = !h.seenByManager;
-  const seenText = isNew 
-    ? '<span style="color:var(--warning);font-weight:700;">🔔 חדש!</span>'
-    : '<span style="color:var(--success);">✓ נקרא</span>';
-  const pastTag = isPast ? '<span style="color:var(--text-muted);font-size:11px;">• עבר</span>' : '';
-
-  const tasksHtml = h.tasks.map((t,i) => `<div style="font-size:13px;padding:3px 0;">${i+1}. ${t}</div>`).join('');
-  const contactHtml = h.contact ? `<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">📞 מחליף/ה: ${h.contact}</div>` : '';
-
-  return `
-    <div class="handover-card ${isNew ? 'new-handover' : ''}" style="background:var(--surface);border-radius:12px;padding:16px;margin-bottom:12px;border-right:4px solid ${isNew?'var(--warning)':'var(--success)'};">
-      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px;">
-        <div>
-          <div style="font-weight:700;font-size:15px;">${h.fullName}</div>
-          <div style="font-size:13px;color:var(--text-muted);">${dateHeb} ${pastTag}</div>
+    const dateHeb = new Date(h.date).toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
+    const isPast = h.date < today;
+    const seen = h.seenByManager ? '<span style="color:var(--success);font-size:11px;">✅ נקרא</span>' : '<span style="color:var(--warning);font-size:11px;">🔔 חדש</span>';
+    const pastTag = isPast ? '<span style="color:var(--text-muted);font-size:11px;">• עבר</span>' : '';
+    const tasks = h.tasks.map((t,i) => `<div style="font-size:13px;color:var(--text-secondary);padding:3px 0;">${i+1}. ${t}</div>`).join('');
+    const contact = h.contact ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📞 מחליף/ה: ${h.contact}</div>` : '';
+    const key = h.user + '_' + h.date;
+    return `
+      <div style="background:var(--surface2);border-radius:14px;padding:16px;margin-bottom:10px;border-right:4px solid ${isPast ? 'var(--border-strong)' : 'var(--primary)'};opacity:${isPast ? 0.6 : 1}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <div>
+            <div style="font-weight:800;font-size:15px;">👤 ${h.fullName}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">📅 ${dateHeb} ${pastTag}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${seen}
+            <button onclick="deleteHandover('${key}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);padding:4px;" title="מחק">🗑️</button>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          ${seenText}
-          <button onclick="markHandoverAsSeen('${h.user}_${h.date}')" style="background:none;border:none;font-size:18px;cursor:pointer;" title="סמן כנקרא">✓</button>
-          <button onclick="exportHandoverToPDF('${h.user}_${h.date}')" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--primary);" title="ייצא PDF">📄</button>
-          <button onclick="deleteHandover('${h.user}_${h.date}')" style="background:none;border:none;font-size:18px;color:var(--danger);cursor:pointer;" title="מחק">🗑️</button>
-        </div>
-      </div>
-      <div style="border-top:1px solid var(--border-light);padding-top:12px;">
-        ${tasksHtml}
-        ${contactHtml}
-      </div>
-    </div>
-  `;
-}).join('');
+        <div style="border-top:1px solid var(--border);padding-top:10px;">${tasks}${contact}</div>
+      </div>`;
+  }).join('');
 }
 
 function deleteHandover(key) {
@@ -6456,58 +6431,4 @@ function exportHandoversExcel() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('📊 הקובץ הורד בהצלחה', 'success');
-}
-function markHandoverAsSeen(key) {
-  const db = getDB();
-  if (db.handovers && db.handovers[key]) {
-    db.handovers[key].seenByManager = true;
-    saveDB(db);
-    showToast('✅ סומן כנקרא', 'success');
-    renderHandoverList();
-  }
-}
-
-function exportHandoverToPDF(key) {
-  const db = getDB();
-  const h = db.handovers?.[key];
-  if (!h) return;
-
-  const dateHeb = new Date(h.date).toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-
-  const content = `
-פרוטוקול העברת מקל
-──────────────────────
-
-עובד: ${h.fullName}
-תאריך חופשה: ${dateHeb}
-
-משימות להעברה:
-${h.tasks.map((t,i) => `${i+1}. ${t}`).join('\n')}
-
-${h.contact ? `איש קשר / מחליף: ${h.contact}` : ''}
-
-נוצר בתאריך: ${new Date(h.createdAt).toLocaleString('he-IL')}
-  `.trim();
-
-  // פתיחה בחלון חדש + הדפסה
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(`
-    <html dir="rtl" lang="he">
-    <head>
-      <title>פרוטוקול העברת מקל - ${h.fullName}</title>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; direction: rtl; padding: 40px; line-height: 1.6; }
-        h1 { text-align: center; color: #2c3e50; }
-        pre { white-space: pre-wrap; font-size: 15px; }
-      </style>
-    </head>
-    <body>
-      <h1>פרוטוקול העברת מקל</h1>
-      <pre>${content}</pre>
-      <script>window.onload = () => setTimeout(() => window.print(), 500);</script>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
 }
