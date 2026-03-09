@@ -963,6 +963,9 @@ tbody tr:hover { background: var(--surface2); }
   padding: 32px;
   width: 100%;
   max-width: 500px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.06);
   animation: modalIn 0.32s var(--ease-spring);
   direction: rtl;
@@ -1571,41 +1574,44 @@ tbody tr:hover { background: var(--surface2); }
    CEO DASHBOARD CARDS
    ============================================================ */
 .ceo-card {
-  border-radius: 18px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 12px 14px;
   cursor: default;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid rgba(255,255,255,0.1);
   backdrop-filter: blur(12px);
   transition: transform 0.2s;
+  overflow: hidden;
+  min-height: 0;
 }
 .ceo-card[onclick] { cursor: pointer; }
-.ceo-card[onclick]:hover { transform: translateY(-2px); }
-.ceo-card-blue    { background: linear-gradient(135deg, rgba(29,78,216,0.75), rgba(30,64,175,0.75)); }
-.ceo-card-red     { background: linear-gradient(135deg, rgba(190,18,60,0.75), rgba(159,18,57,0.75)); }
-.ceo-card-green   { background: linear-gradient(135deg, rgba(4,120,87,0.75),  rgba(6,95,70,0.75)); }
-.ceo-card-orange  { background: linear-gradient(135deg, rgba(180,83,9,0.75),  rgba(146,64,14,0.75)); }
+.ceo-card[style*="cursor:pointer"]:hover { transform: scale(1.02); }
+.ceo-card-blue    { background: linear-gradient(135deg, rgba(29,78,216,0.8), rgba(30,64,175,0.8)); }
+.ceo-card-red     { background: linear-gradient(135deg, rgba(190,18,60,0.8), rgba(159,18,57,0.8)); }
+.ceo-card-green   { background: linear-gradient(135deg, rgba(4,120,87,0.8),  rgba(6,95,70,0.8)); }
+.ceo-card-orange  { background: linear-gradient(135deg, rgba(180,83,9,0.8),  rgba(146,64,14,0.8)); }
 .ceo-card-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  color: rgba(255,255,255,0.5);
-  letter-spacing: 1px;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.8px;
   text-transform: uppercase;
   flex-shrink: 0;
 }
 .ceo-card-body {
-  font-size: 13px;
+  font-size: 12px;
   color: #fff;
   font-weight: 600;
-  line-height: 1.75;
+  line-height: 1.6;
   white-space: pre-line;
-  overflow-y: auto;
-  max-height: 120px;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 .ceo-card-hint {
-  font-size: 10px;
+  font-size: 9px;
   color: rgba(255,255,255,0.35);
   flex-shrink: 0;
 }
@@ -1974,22 +1980,10 @@ tbody tr:hover { background: var(--surface2); }
 }
 
 /* Splash themes */
-/* 1 — להבת אש / כתום-אדום עז */
-.splash-theme-1 { background: radial-gradient(ellipse at 50% 0%, #6b1a00 0%, #2d0a00 60%, #080200 100%); }
-/* 2 — נאון סגול / סייבר-פאנק */
-.splash-theme-2 { background: radial-gradient(ellipse at 50% 0%, #3d0066 0%, #1a0033 50%, #05000f 100%); }
-/* 3 — ירוק רדיואקטיבי / מטריקס */
-.splash-theme-3 { background: radial-gradient(ellipse at 50% 0%, #003300 0%, #001a00 60%, #000500 100%); }
-/* 4 — כחול קרח עמוק / קוטב */
-.splash-theme-4 { background: radial-gradient(ellipse at 50% 0%, #002244 0%, #000d1a 60%, #000205 100%); }
-/* 5 — אדום דם / מתח */
-.splash-theme-5 { background: radial-gradient(ellipse at 50% 0%, #550000 0%, #220000 60%, #070000 100%); }
-/* 6 — זהב שרוף / מדבר לילה */
-.splash-theme-6 { background: radial-gradient(ellipse at 50% 0%, #4a2e00 0%, #1f1200 60%, #060300 100%); }
-/* 7 — ורוד/מגנטה ניאון */
-.splash-theme-7 { background: radial-gradient(ellipse at 50% 0%, #5c0033 0%, #2a0018 60%, #080005 100%); }
-/* 8 — ציאן קפוא / עתידני */
-.splash-theme-8 { background: radial-gradient(ellipse at 50% 0%, #003344 0%, #001520 60%, #000408 100%); }
+.splash-theme-1 { background: radial-gradient(ellipse at 50% 0%, #0d2060 0%, #060e24 60%, #030710 100%); }
+.splash-theme-2 { background: radial-gradient(ellipse at 50% 0%, #1a0040 0%, #0f0c29 50%, #030710 100%); }
+.splash-theme-3 { background: radial-gradient(ellipse at 50% 0%, #0a3020 0%, #071a10 60%, #030810 100%); }
+.splash-theme-4 { background: radial-gradient(ellipse at 50% 0%, #001840 0%, #001020 60%, #000510 100%); }
 
 /* Animated particle stars */
 .splash-particles {
