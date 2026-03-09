@@ -1,21 +1,4 @@
 
-// ── DISPLAY HELPERS (handle dz-20 initial-hidden class) ──────
-function showEl(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove('dz-20'); el.style.display = '';
-}
-function hideEl(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = 'none';
-}
-function showElInline(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove('dz-20'); el.style.display = 'inline-block';
-}
-
 // DATA LAYER — localStorage based
 // ============================================================
 const DB_KEY = 'vacSystem_v3';
@@ -481,132 +464,6 @@ function dateToStr(y, m, d) {
 // AUTH STATE
 // ============================================================
 
-// ============================================================
-// 🫆 BIOMETRIC LOGIN — WebAuthn / Face ID / Fingerprint
-// ============================================================
-async function initBiometricSection() {
-  const section = document.getElementById('biometricSection');
-  if (!section) return;
-  // Show biometric buttons only if WebAuthn is available
-  if (window.PublicKeyCredential) {
-    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
-    if (available) {
-      section.style.display = 'block';
-    }
-  }
-}
-
-async function doBiometricLogin(type) {
-  const btn = document.getElementById(type === 'fingerprint' ? 'fingerprintBtn' : 'faceIdBtn');
-  const origHtml = btn ? btn.innerHTML : '';
-  try {
-    if (btn) {
-      btn.innerHTML = `<span class="dz-fs-95">⏳</span><span>מאמת...</span>`;
-      btn.disabled = true;
-    }
-
-    // Check for stored biometric credential
-    const storedCred = localStorage.getItem('dazura_biometric_user');
-    if (!storedCred) {
-      showToast('⚠️ אין פרטי ביומטריה שמורים — התחבר תחילה עם סיסמה', 'warning', 4000);
-      if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
-      return;
-    }
-
-    const { username, credentialId } = JSON.parse(storedCred);
-
-    // WebAuthn assertion (real device will prompt fingerprint/face)
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const assertion = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        rpId: location.hostname || 'localhost',
-        allowCredentials: credentialId ? [{
-          id: Uint8Array.from(atob(credentialId), c => c.charCodeAt(0)),
-          type: 'public-key'
-        }] : [],
-        userVerification: 'required',
-        timeout: 60000
-      }
-    });
-
-    if (assertion) {
-      // Verified — log in the stored user
-      const db = getDB();
-      const user = db.users[username];
-      if (!user) throw new Error('User not found');
-      currentUser = user;
-      hideLoginError();
-      document.getElementById('loginScreen').classList.remove('active');
-      showModuleSelector();
-      
-    }
-  } catch (err) {
-    if (err.name === 'NotAllowedError') {
-      showToast('❌ אימות בוטל', 'warning', 3000);
-    } else {
-      showToast('⚠️ ' + (err.message || 'שגיאת אימות ביומטרי'), 'warning', 4000);
-    }
-  } finally {
-    if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
-  }
-}
-
-async function registerBiometric() {
-  if (!currentUser) return;
-  if (!window.PublicKeyCredential) {
-    showToast('⚠️ הדפדפן לא תומך בביומטריה', 'warning'); return;
-  }
-  try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const userId = new TextEncoder().encode(currentUser.username);
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: 'Dazura', id: location.hostname || 'localhost' },
-        user: { id: userId, name: currentUser.username, displayName: currentUser.fullName },
-        pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
-        timeout: 60000
-      }
-    });
-    if (cred) {
-      const credId = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
-      localStorage.setItem('dazura_biometric_user', JSON.stringify({
-        username: currentUser.username, credentialId: credId
-      }));
-      
-    }
-  } catch(err) {
-    if (err.name !== 'NotAllowedError') showToast('⚠️ לא ניתן לרשום ביומטריה', 'warning');
-  }
-}
-
-// Initialize biometric on page load
-document.addEventListener('DOMContentLoaded', () => {
-  initBiometricSection();
-});
-
-// ============================================================
-// 🤖 AI ROBOT BUTTON — render helper
-// ============================================================
-function renderAIRobotBtn(containerId, label, onClick) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.innerHTML = `
-    <div class="ai-robot-btn" onclick="${onClick}" title="${label}">
-      <div class="ai-robot-body">
-        <div class="ai-robot-antenna"></div>
-        <div class="ai-robot-eyes">
-          <div class="ai-robot-eye"></div>
-          <div class="ai-robot-eye"></div>
-        </div>
-      </div>
-      <div class="ai-robot-flame"></div>
-      <div class="ai-robot-label">${label}</div>
-    </div>`;
-}
-
 function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
@@ -648,25 +505,13 @@ function doLogin() {
   }
 
   document.getElementById('loginScreen').classList.remove('active');
+  showAIButton();
   showModuleSelector();
-  // After password login: offer biometric setup if not yet registered
-  setTimeout(offerBiometricSetup, 1000);
 }
 
-async function offerBiometricSetup() {
-  if (!window.PublicKeyCredential) return;
-  if (localStorage.getItem('dazura_biometric_user')) return;
-  try {
-    const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    if (!ok) return;
-    // Auto-register silently — device will prompt fingerprint/face natively
-    await registerBiometric();
-  } catch(e) {
-    // Silent fail — user may have dismissed or device doesn't support
-  }
-}
 function doLogout() {
   currentUser = null;
+  hideAIButton();
   ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
   });
@@ -692,25 +537,24 @@ function regNextStep(step) {
     const fullName = document.getElementById('regFullName').value.trim();
     const username = document.getElementById('regUsername').value.trim();
     const dept     = document.getElementById('regDept').value;
-    if (!fullName) { errEl.textContent = 'נא להזין שם מלא'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
-    if (!username) { errEl.textContent = 'נא להזין שם משתמש'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) { errEl.textContent = 'שם משתמש: אנגלית/מספרים בלבד'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
-    if (!dept) { errEl.textContent = 'נא לבחור מחלקה'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+    if (!fullName) { errEl.textContent = 'נא להזין שם מלא'; errEl.style.display = 'block'; return; }
+    if (!username) { errEl.textContent = 'נא להזין שם משתמש'; errEl.style.display = 'block'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) { errEl.textContent = 'שם משתמש: אנגלית/מספרים בלבד'; errEl.style.display = 'block'; return; }
+    if (!dept) { errEl.textContent = 'נא לבחור מחלקה'; errEl.style.display = 'block'; return; }
     const db = getDB();
-    if (db.users[username.toLowerCase()]) { errEl.textContent = 'שם משתמש זה כבר קיים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+    if (db.users[username.toLowerCase()]) { errEl.textContent = 'שם משתמש זה כבר קיים'; errEl.style.display = 'block'; return; }
   }
   if (step === 3) {
     const pass  = document.getElementById('regPassword').value;
     const pass2 = document.getElementById('regPassword2').value;
-    if (pass.length < 4) { errEl.textContent = 'הסיסמה חייבת להיות לפחות 4 תווים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
-    if (pass !== pass2)  { errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+    if (pass.length < 4) { errEl.textContent = 'הסיסמה חייבת להיות לפחות 4 תווים'; errEl.style.display = 'block'; return; }
+    if (pass !== pass2)  { errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.style.display = 'block'; return; }
   }
 
   // Show correct step
   [1,2,3].forEach(i => {
-    const _rs = document.getElementById('regStep' + i);
-    if (_rs) { if (i === step) { _rs.classList.remove('dz-20'); _rs.style.display = ''; } else { _rs.style.display = 'none'; } }
-    const regDot = document.getElementById('regDot' + i); if (regDot) { regDot.classList.toggle('dz-step-active', i <= step); regDot.classList.toggle('dz-step-inactive', i > step); }
+    document.getElementById('regStep' + i).style.display = i === step ? '' : 'none';
+    document.getElementById('regDot' + i).style.background = i <= step ? 'var(--primary)' : 'var(--border)';
   });
 }
 
@@ -747,18 +591,18 @@ function doRegister() {
   errEl.style.display = 'none';
   
   if (!fullName || !username || !dept || !pass) {
-    errEl.textContent = 'נא למלא את כל השדות'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'נא למלא את כל השדות'; errEl.style.display = 'block'; return;
   }
   if (pass.length < 4) {
-    errEl.textContent = 'הסיסמה חייבת להיות לפחות 4 תווים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'הסיסמה חייבת להיות לפחות 4 תווים'; errEl.style.display = 'block'; return;
   }
   if (pass !== pass2) {
-    errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.style.display = 'block'; return;
   }
   
   const db = getDB();
   if (db.users[username]) {
-    errEl.textContent = 'שם משתמש זה כבר קיים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'שם משתמש זה כבר קיים'; errEl.style.display = 'block'; return;
   }
 
   // Check if admin approval required
@@ -789,7 +633,7 @@ function doRegister() {
     document.getElementById('pendingApprovalScreen').classList.add('active');
     document.getElementById('pendingUserName').textContent = fullName;
   } else {
-    
+    showToast('✅ נרשמת בהצלחה! כעת תוכל להיכנס למערכת', 'success');
     document.getElementById('loginUsername').value = username;
   }
   auditLog('register', `${fullName} (${username}) נרשם — ממתין לאישור`);
@@ -810,12 +654,10 @@ function showApp(skipModuleSelector) {
 
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
-  
+  showAIButton();
   // Set user info
-  const _nav = document.getElementById('navUserName');
-  if (_nav) { _nav.classList.remove('dz-20'); _nav.textContent = currentUser.fullName; }
-  const _av = document.getElementById('userAvatar');
-  if (_av) { _av.classList.remove('dz-20'); _av.textContent = currentUser.fullName.charAt(0); }
+  document.getElementById('navUserName').textContent = currentUser.fullName;
+  document.getElementById('userAvatar').textContent = currentUser.fullName.charAt(0);
 
   // Show company name in nav if element exists
   const nameDisplay = document.getElementById('companyNameDisplay');
@@ -827,12 +669,10 @@ function showApp(skipModuleSelector) {
   const hasAdminAccess = isAdmin || userHasAnyAdminAccess(currentUser.username);
 
   document.querySelectorAll('.admin-only').forEach(el => {
-    if (hasAdminAccess) { el.classList.remove('dz-20'); el.style.display = ''; }
-    else { el.style.display = 'none'; }
+    el.style.display = hasAdminAccess ? '' : 'none';
   });
   document.querySelectorAll('.manager-only').forEach(el => {
-    if (isManager) { el.classList.remove('dz-20'); el.style.display = ''; }
-    else { el.style.display = 'none'; }
+    el.style.display = isManager ? '' : 'none';
   });
   
   // Firebase button: admin only
@@ -1046,13 +886,13 @@ function renderDashboard() {
   
   // Color balance
   const balEl = document.getElementById('statBalance');
-  balElclassList.toggle('dz-balance-danger', cb.balance < 0); el.classList.toggle('dz-balance-warning', cb.balance >= 0);
+  balEl.style.color = cb.balance < 0 ? 'var(--danger)' : 'var(--warning)';
   
   // Quota upload notice for accountant/admin only
   if (currentUser.role === 'accountant' || currentUser.role === 'admin') {
     const nowDate = new Date();
     const isJan = nowDate.getMonth() === 0 && nowDate.getDate() <= 9;
-    const _qs=document.getElementById('quotaUploadSection'); if(_qs){_qs.classList.remove('dz-20');_qs.style.display='';}
+    document.getElementById('quotaUploadSection').style.display = 'block';
     document.getElementById('quotaUploadStatus').textContent = isJan 
       ? ' — חלון הטעינה פתוח עד 09 לינואר!' 
       : ' — החלון נסגר (01-09 לינואר בלבד)';
@@ -1088,9 +928,9 @@ function renderMonthlyChart(year) {
   const labelsEl = document.getElementById('monthlyBarLabels');
   
   chartEl.innerHTML = monthData.map((v, i) => `
-    <div class="dz-flex-col-1001">
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
       <span style="font-size:10px;font-weight:700;color:${v > 0 ? 'var(--primary)' : 'var(--text-muted)'};">${v || ''}</span>
-      <div class="dz-1002"></div>
+      <div style="width:100%;background:${v > 0 ? 'var(--primary)' : 'var(--border)'};height:${Math.round((v/max)*140)+4}px;border-radius:4px 4px 0 0;min-height:4px;transition:height 0.3s;"></div>
     </div>
   `).join('');
   
@@ -1112,7 +952,7 @@ function renderUpcoming() {
   
   const el = document.getElementById('upcomingVacations');
   if (upcoming.length === 0) {
-    el.innerHTML = '<p class="dz-1003">אין חופשות מתוכננות קרובות</p>';
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:14px;text-align:center;padding:20px;">אין חופשות מתוכננות קרובות</p>';
     return;
   }
   
@@ -1123,10 +963,10 @@ function renderUpcoming() {
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
         <div>
-          <div class="dz-1004">${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</div>
-          <div class="dz-97">${dayName}</div>
+          <div style="font-weight:700;font-size:14px;">${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${dayName}</div>
         </div>
-        <span class="dz-1005">${typeLabel}</span>
+        <span style="font-size:13px;font-weight:600;">${typeLabel}</span>
       </div>
     `;
   }).join('');
@@ -1236,7 +1076,7 @@ function renderCalendar() {
       const sickBadge = document.createElement('div');
       sickBadge.className = 'day-badge';
       sickBadge.textContent = '🤒';
-      sickBadge.classList.add('dz-sick-badge');
+      sickBadge.style.cssText = 'background:#1f2937;color:white;';
       cell.appendChild(sickBadge);
     }
 
@@ -1272,7 +1112,7 @@ function openDayModal(dateStr, hol, currentType, isSick) {
   
   let info = '';
   if (hol && hol.name) info = `<strong>אירוע:</strong> ${hol.name}<br>`;
-  if (hol && hol.isHalf) info += `<span class="dz-1006">⚠️ ערב חג — ניתן לבחור חצי יום בלבד</span>`;
+  if (hol && hol.isHalf) info += `<span style="color:var(--warning);font-weight:600;">⚠️ ערב חג — ניתן לבחור חצי יום בלבד</span>`;
   document.getElementById('dayModalInfo').innerHTML = info;
   
   const opts = document.getElementById('dayModalOptions');
@@ -1280,11 +1120,11 @@ function openDayModal(dateStr, hol, currentType, isSick) {
 
   // If sick day — show only cancel sick option
   if (isSick) {
-    document.getElementById('dayModalInfo').innerHTML = `<span class="dz-30">🤒 יום מחלה מדווח</span>`;
+    document.getElementById('dayModalInfo').innerHTML = `<span style="color:#374151;font-weight:700;">🤒 יום מחלה מדווח</span>`;
     // Hide toggle since we're in sick mode view
     document.getElementById('sickToggle').closest('div').style.display = 'none';
     const btn = document.createElement('button');
-    btn.className = 'dz-day-btn dz-day-btn-sick';
+    btn.style.cssText = 'display:block;width:100%;padding:14px 20px;border-radius:10px;border:2px solid var(--danger);background:#fef2f2;font-family:\'Heebo\',sans-serif;font-size:15px;font-weight:600;cursor:pointer;text-align:right;color:var(--danger);';
     btn.textContent = '❌ בטל דיווח מחלה';
     btn.onclick = () => {
       const db = getDB();
@@ -1293,7 +1133,7 @@ function openDayModal(dateStr, hol, currentType, isSick) {
       closeModal('dayModal');
       renderCalendar();
       updateSickCount();
-      
+      showToast('✅ דיווח מחלה בוטל', 'success');
     };
     opts.appendChild(btn);
     openModal('dayModal');
@@ -1322,15 +1162,14 @@ function openDayModal(dateStr, hol, currentType, isSick) {
   options.forEach(opt => {
     const btn = document.createElement('button');
     btn.className = 'day-option-btn';
-    btn.className = 'dz-day-option-btn' + (opt.active ? ' dz-day-option-active' : '');
-    if (opt.active) { /* dynamic: opt.color varies per option type */ btn.style.borderColor = opt.color; btn.style.background = opt.color + '22'; btn.style.color = opt.color; }
+    btn.style.cssText = `display:block;width:100%;padding:14px 20px;border-radius:10px;border:2px solid ${opt.active ? opt.color : 'var(--border)'};background:${opt.active ? opt.color + '22' : 'white'};font-family:'Heebo',sans-serif;font-size:15px;font-weight:600;cursor:pointer;text-align:right;color:${opt.active ? opt.color : 'var(--text)'};transition:all 0.2s;margin-bottom:8px;`;
     btn.textContent = opt.label + (opt.active ? ' ✓' : '');
     btn.onclick = () => {
       saveVacation(currentUser.username, dateStr, opt.type);
       closeModal('dayModal');
       renderCalendar();
       renderDashboard();
-      
+      showToast(opt.type ? '✅ הבחירה נשמרה' : '🗑️ הבחירה בוטלה', 'success');
     };
     opts.appendChild(btn);
   });
@@ -1365,7 +1204,7 @@ function renderYearly() {
     // Day header
     ['א','ב','ג','ד','ה','ו','ש'].forEach(dn => {
       const h = document.createElement('div');
-      h.className = 'dz-mini-cal-hdr';
+      h.style.cssText = 'font-size:9px;font-weight:700;color:var(--text-muted);text-align:center;padding:2px 0;';
       h.textContent = dn;
       miniGrid.appendChild(h);
     });
@@ -1442,22 +1281,22 @@ function renderReport() {
   
   const content = document.getElementById('reportContent');
   content.innerHTML = `
-    <div class="dz-grid-1007">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
       <div style="background:var(--primary-light);border-radius:10px;padding:16px;text-align:center;">
-        <div class="dz-1008">${annual}</div>
-        <div class="dz-1010">מכסה שנתית</div>
+        <div style="font-size:24px;font-weight:800;color:var(--primary);">${annual}</div>
+        <div style="font-size:12px;color:var(--text-secondary);">מכסה שנתית</div>
       </div>
-      <div class="dz-card-1009">
+      <div style="background:#dcfce7;border-radius:10px;padding:16px;text-align:center;">
         <div style="font-size:24px;font-weight:800;color:var(--success);">${stats.total}</div>
-        <div class="dz-1010">ימים שנוצלו</div>
+        <div style="font-size:12px;color:var(--text-secondary);">ימים שנוצלו</div>
       </div>
       <div style="background:#fef9c3;border-radius:10px;padding:16px;text-align:center;">
-        <div class="dz-1011">${stats.wfh}</div>
-        <div class="dz-1010">ימי WFH</div>
+        <div style="font-size:24px;font-weight:800;color:#ca8a04;">${stats.wfh}</div>
+        <div style="font-size:12px;color:var(--text-secondary);">ימי WFH</div>
       </div>
-      <div class="dz-card-1012">
+      <div style="background:${balance < 0 ? 'var(--danger-light)' : 'var(--success-light)'};border-radius:10px;padding:16px;text-align:center;">
         <div style="font-size:24px;font-weight:800;color:${balance < 0 ? 'var(--danger)' : 'var(--success)'};">${balance.toFixed(2)}</div>
-        <div class="dz-1010">יתרה נוכחית</div>
+        <div style="font-size:12px;color:var(--text-secondary);">יתרה נוכחית</div>
       </div>
     </div>
     
@@ -1478,12 +1317,12 @@ function renderReport() {
             const total = m.full + m.half * 0.5;
             const payMonth = i >= 10 ? (i === 10 ? 0 : 1) : i + 1;
             return `<tr>
-              <td class="dz-1013">${monthNames[i]}</td>
+              <td style="font-weight:700;">${monthNames[i]}</td>
               <td>${m.full || '-'}</td>
               <td>${m.half || '-'}</td>
               <td>${m.wfh || '-'}</td>
               <td style="font-weight:700;color:${total > 0 ? 'var(--primary)' : 'var(--text-muted)'};">${total || '-'}</td>
-              <td class="dz-97">${total > 0 ? monthNames[payMonth] : '-'}</td>
+              <td style="font-size:12px;color:var(--text-muted);">${total > 0 ? monthNames[payMonth] : '-'}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -1493,7 +1332,7 @@ function renderReport() {
             <td>${stats.full}</td>
             <td>${stats.half}</td>
             <td>${stats.wfh}</td>
-            <td colspan="2" class="dz-clr-160">${stats.total} ימי חופשה</td>
+            <td colspan="2" style="color:var(--primary);">${stats.total} ימי חופשה</td>
           </tr>
         </tfoot>
       </table>
@@ -1529,7 +1368,7 @@ function exportPersonalReport() {
   a.download = `חופשות_${currentUser.fullName}_${year}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  
+  showToast('📊 הקובץ הורד בהצלחה', 'success');
 }
 
 function exportAllToCSV() {
@@ -1570,7 +1409,7 @@ function exportAllToCSV() {
   a.download = `כל_החופשות_${year}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  
+  showToast('📊 הייצוא הסתיים בהצלחה', 'success');
 }
 
 
@@ -1686,9 +1525,9 @@ function renderAIForecast() {
     } else {
       alertsEl.innerHTML = alerts.map(a => {
         const c = alertColors[a.level];
-        return `<div class="dz-card-1016">
+        return `<div style="background:${c.bg};border:1px solid ${c.border};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
           <div style="font-weight:700;font-size:14px;color:${c.text};">${a.icon} ${a.text}</div>
-          ${a.sub ? `<div class="dz-1017">${a.sub}</div>` : ''}
+          ${a.sub ? `<div style="font-size:12px;color:${c.text};opacity:0.8;margin-top:3px;">${a.sub}</div>` : ''}
         </div>`;
       }).join('');
     }
@@ -1715,7 +1554,7 @@ function renderAIForecast() {
     // Weeks grid
     html += '<div>';
     // Day labels
-    html += '<div class="dz-flex-col-1018">';
+    html += '<div style="display:flex;flex-direction:column;gap:2px;margin-top:20px;margin-left:4px;">';
     ['א','ב','ג','ד','ה'].forEach(d => {
       html += `<div style="font-size:9px;color:var(--text-muted);height:12px;line-height:12px;">${d}</div>`;
     });
@@ -1728,13 +1567,13 @@ function renderAIForecast() {
       const color = getHeatColor(intensity);
       const monthLabel = monthStarts[w] || '';
 
-      html += `<div class="dz-flex-col-1019">
+      html += `<div style="display:flex;flex-direction:column;gap:2px;">
         <div style="font-size:9px;color:var(--text-muted);height:16px;white-space:nowrap;overflow:visible;">${monthLabel}</div>`;
 
       // 5 work days
       for (let d = 0; d < 5; d++) {
         const title = data.count > 0 ? `שבוע ${w}: ${data.count} ימים — ${data.names.slice(0,3).join(', ')}` : `שבוע ${w}: אין חופשות`;
-        html += `<div title="${title}" class="dz-1020"></div>`;
+        html += `<div title="${title}" style="width:12px;height:12px;border-radius:2px;background:${color};cursor:pointer;"></div>`;
       }
       html += '</div>';
     }
@@ -1743,7 +1582,7 @@ function renderAIForecast() {
     // Legend
     html += `<div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--text-muted);">
       <span>פחות</span>
-      ${[0,0.25,0.5,0.75,1].map(v=>`<div class="dz-1021"></div>`).join('')}
+      ${[0,0.25,0.5,0.75,1].map(v=>`<div style="width:12px;height:12px;border-radius:2px;background:${getHeatColor(v)};"></div>`).join('')}
       <span>יותר</span>
     </div>`;
 
@@ -1754,25 +1593,25 @@ function renderAIForecast() {
   const chartEl = document.getElementById('deptMonthChart');
   if (chartEl) {
     const depts = Object.keys(deptMonthMap).slice(0, 6); // max 6 depts
-    if (!depts.length) { chartEl.innerHTML = '<p class="dz-225">אין נתונים</p>'; return; }
+    if (!depts.length) { chartEl.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">אין נתונים</p>'; return; }
 
     const deptColors = ['#1a56e8','#16a34a','#7c3aed','#0891b2','#dc2626','#d97706'];
     const maxVal = Math.max(1, ...depts.flatMap(d => deptMonthMap[d]));
 
-    let html = '<div class="dz-190"><table style="border-collapse:collapse;font-size:11px;min-width:600px;">';
+    let html = '<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:11px;min-width:600px;">';
     // Header
-    html += '<tr><th class="dz-1023"></th>';
+    html += '<tr><th style="padding:4px 8px;text-align:right;width:80px;"></th>';
     MONTHS.forEach(m => { html += `<th style="padding:4px 6px;color:var(--text-secondary);font-weight:600;text-align:center;">${m.slice(0,3)}</th>`; });
     html += '</tr>';
 
     depts.forEach((dept, di) => {
       const color = deptColors[di % deptColors.length];
-      html += `<tr><td class="dz-1024">${dept}</td>`;
+      html += `<tr><td style="padding:6px 8px;font-weight:600;color:${color};white-space:nowrap;">${dept}</td>`;
       deptMonthMap[dept].forEach(val => {
         const h = val > 0 ? Math.max(4, Math.round(val / maxVal * 40)) : 0;
         const pct = val > 0 ? val.toFixed(0) : '';
         html += `<td style="padding:4px 6px;text-align:center;vertical-align:bottom;">
-          ${h > 0 ? `<div title="${val} ימים" class="dz-1025"></div>` : ''}
+          ${h > 0 ? `<div title="${val} ימים" style="height:${h}px;background:${color};border-radius:2px 2px 0 0;margin:0 auto;width:14px;opacity:0.85;"></div>` : ''}
           <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${pct}</div>
         </td>`;
       });
@@ -1781,10 +1620,10 @@ function renderAIForecast() {
     html += '</table></div>';
 
     // Legend
-    html += '<div class="dz-flex-1026">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">';
     depts.forEach((d, i) => {
       html += `<span style="display:flex;align-items:center;gap:4px;font-size:11px;">
-        <span class="dz-1027"></span>${d}
+        <span style="width:10px;height:10px;border-radius:2px;background:${deptColors[i % deptColors.length]};display:inline-block;"></span>${d}
       </span>`;
     });
     html += '</div>';
@@ -1858,14 +1697,14 @@ function handleLogoUpload(input) {
       if (preview) { preview.src = base64; preview.style.display = ''; }
       const logoEl = document.getElementById('companyLogoDisplay');
       const iconEl = document.getElementById('brandIcon');
-      if (logoEl) { logoEl.src = base64; logoEl.classList.remove('dz-20'); logoEl.style.display = ''; }
+      if (logoEl) { logoEl.src = base64; logoEl.style.display = ''; }
       if (iconEl) iconEl.style.display = 'none';
       // Also update module selector logo
       const mLogoImg  = document.getElementById('moduleLogoImg');
       const mLogoIcon = document.getElementById('moduleBrandIcon');
       if (mLogoImg)  { mLogoImg.src = base64; mLogoImg.style.display = ''; }
       if (mLogoIcon) mLogoIcon.style.display = 'none';
-      
+      showToast('✅ לוגו הועלה — לחץ "שמור הגדרות" לשמירה', 'success');
     };
     img.src = e.target.result;
   };
@@ -1879,9 +1718,9 @@ function clearLogo() {
   const logoEl = document.getElementById('companyLogoDisplay');
   const iconEl = document.getElementById('brandIcon');
   if(logoEl) logoEl.style.display = 'none';
-  if(iconEl) { iconEl.classList.remove('dz-20'); iconEl.style.display = ''; }
+  if(iconEl) iconEl.style.display = '';
   if(document.getElementById('logoFileInput')) document.getElementById('logoFileInput').value = '';
-  
+  showToast('🗑️ לוגו הוסר', 'warning');
 }
 
 function loadCompanySettings() {
@@ -1931,7 +1770,6 @@ function applyBranding(s) {
   }
 }
 
-
 function saveCompanySettings() {
   const get = id => document.getElementById(id)?.value;
   const s = {
@@ -1948,7 +1786,7 @@ function saveCompanySettings() {
   saveSettings(s);
   applyBranding(s);
   auditLog('settings_changed', 'הגדרות חברה עודכנו');
-  
+  showToast('✅ הגדרות נשמרו — הכותרת עודכנה', 'success');
   updateCyclePreview();
 }
 
@@ -2001,10 +1839,10 @@ function renderManagerDashboard() {
     { icon:'👥', val:totalEmployees,         label:'סה"כ עובדים',  color:'var(--success)', bg:'var(--success-light)',names:[] },
     { icon:'⏳', val:pending,               label:'בקשות ממתינות', color:'var(--danger)',  bg:'var(--danger-light)', names:[] }
   ].map(c=>`
-    <div class="dz-card-1028" title="${c.names.join(', ')}">
-      <div class="dz-1029">${c.val}</div>
+    <div style="background:${c.bg};border-radius:12px;padding:16px;text-align:center;" title="${c.names.join(', ')}">
+      <div style="font-size:30px;font-weight:900;color:${c.color};">${c.val}</div>
       <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">${c.icon} ${c.label}</div>
-      ${c.names.length?`<div class="dz-1030">${c.names.slice(0,3).join(', ')}${c.names.length>3?'…':''}</div>`:''}
+      ${c.names.length?`<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${c.names.slice(0,3).join(', ')}${c.names.length>3?'…':''}</div>`:''}
     </div>`).join('');
 
   // PENDING APPROVALS
@@ -2022,17 +1860,17 @@ function renderManagerDashboard() {
       pendingEl.innerHTML = pendingReqs.map(req => {
         const hrs = Math.round((Date.now()-new Date(req.createdAt))/3600000);
         const urgent = hrs >= timeout;
-        return `<div class="dz-flex-1031">
+        return `<div style="background:${urgent?'#fef2f2':'var(--surface2)'};border:1px solid ${urgent?'#fca5a5':'var(--border)'};border-radius:10px;padding:14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
           <div>
-            <div class="dz-1004">${req.fullName} ${urgent?`<span class="dz-1032">⚠️ ממתין ${hrs} שעות</span>`:''}</div>
-            <div class="dz-1010">${req.dateRange||''} • ${req.dept||''} • ${req.days||0} ימים</div>
-            ${isAdmin && req.assignedManager ? `<div class="dz-12">מיועד ל: ${db.users[req.assignedManager]?.fullName||req.assignedManager}</div>` : ''}
-            <div class="dz-12">הוגש: ${new Date(req.createdAt).toLocaleDateString('he-IL')}</div>
-            ${req.note?`<div class="dz-1034">💬 "${req.note}"</div>`:''}
+            <div style="font-weight:700;font-size:14px;">${req.fullName} ${urgent?`<span style="color:var(--danger);font-size:12px;">⚠️ ממתין ${hrs} שעות</span>`:''}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${req.dateRange||''} • ${req.dept||''} • ${req.days||0} ימים</div>
+            ${isAdmin && req.assignedManager ? `<div style="font-size:11px;color:var(--text-muted);">מיועד ל: ${db.users[req.assignedManager]?.fullName||req.assignedManager}</div>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);">הוגש: ${new Date(req.createdAt).toLocaleDateString('he-IL')}</div>
+            ${req.note?`<div style="font-size:12px;color:var(--primary);margin-top:4px;">💬 "${req.note}"</div>`:''}
           </div>
-          <div class="dz-flex-53">
-            <button class="btn btn-success" class="dz-fs-236" onclick="approveRequest('${req.id}')">✅ אשר</button>
-            <button class="btn" class="dz-1037" onclick="rejectRequestPrompt('${req.id}')">❌ דחה</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-success" style="font-size:13px;" onclick="approveRequest('${req.id}')">✅ אשר</button>
+            <button class="btn" style="font-size:13px;background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;" onclick="rejectRequestPrompt('${req.id}')">❌ דחה</button>
           </div>
         </div>`;
       }).join('');
@@ -2051,14 +1889,14 @@ function renderManagerDashboard() {
     });
     upcoming.sort((a,b)=>a.date.localeCompare(b.date));
     if(!upcoming.length) {
-      upcomingEl.innerHTML='<p class="dz-1038">אין חופשות מתוכננות ב-30 הימים הקרובים</p>';
+      upcomingEl.innerHTML='<p style="color:var(--text-muted);font-size:14px;">אין חופשות מתוכננות ב-30 הימים הקרובים</p>';
     } else {
       const grouped={};
       upcoming.forEach(u=>{if(!grouped[u.date])grouped[u.date]=[];grouped[u.date].push(u);});
       upcomingEl.innerHTML=Object.entries(grouped).map(([dt,items])=>{
         const d=new Date(dt+'T00:00:00');
         return `<div style="margin-bottom:10px;">
-          <div class="dz-1039">${d.getDate()} ${monthNames[d.getMonth()]}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:4px;">${d.getDate()} ${monthNames[d.getMonth()]}</div>
           ${items.map(i=>`<span style="display:inline-block;background:${i.type==='wfh'?'#f3e8ff':'var(--primary-light)'};color:${i.type==='wfh'?'#7c3aed':'var(--primary-dark)'};border-radius:20px;padding:3px 10px;font-size:12px;margin:2px;">${i.name}${i.type==='wfh'?' 🏠':i.type==='half'?' (חצי)':''}</span>`).join('')}
         </div>`;
       }).join('');
@@ -2072,7 +1910,7 @@ function renderManagerDashboard() {
   const overlapEl = document.getElementById('overlapList');
   if(overlapEl && overlaps.length) {
     overlapEl.innerHTML = overlaps.map(o=>`
-      <div class="dz-card-1040">
+      <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:13px;">
         ⚠️ <strong>${o.date}</strong> — מחלקת ${o.dept}: <strong>${o.names.join(' ו-')}</strong> שניהם בחופשה
       </div>`).join('');
   }
@@ -2085,32 +1923,32 @@ function renderManagerDashboard() {
       const cb = calcBalance(u.username, year);
       const pct = Math.min(100, cb.stats.total/Math.max(1,cb.annual)*100);
       const color = cb.projectedEndBalance<0?'var(--danger)':cb.projectedEndBalance<3?'var(--warning)':'var(--success)';
-      return `<tr class="dz-1134">
-        <td class="dz-1041">${u.fullName}</td>
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px;font-weight:600;">${u.fullName}</td>
         <td style="padding:10px;text-align:center;font-size:13px;">${u.dept?.[0]||'-'}</td>
-        <td class="dz-1042">${cb.annual}</td>
-        <td class="dz-1042">${cb.stats.total}</td>
-        <td class="dz-1043">
+        <td style="padding:10px;text-align:center;">${cb.annual}</td>
+        <td style="padding:10px;text-align:center;">${cb.stats.total}</td>
+        <td style="padding:10px;min-width:100px;">
           <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
-            <div class="dz-1044"></div>
+            <div style="height:100%;width:${pct}%;background:var(--primary);border-radius:4px;transition:width 0.5s;"></div>
           </div>
         </td>
         <td style="padding:10px;text-align:center;font-weight:700;color:${color};">${cb.balance.toFixed(1)}</td>
-        <td class="dz-1045">${cb.projectedEndBalance.toFixed(1)}</td>
+        <td style="padding:10px;text-align:center;font-size:12px;color:var(--text-muted);">${cb.projectedEndBalance.toFixed(1)}</td>
       </tr>`;
     }).join('');
     teamEl.innerHTML = rows ? `
-      <div class="table-wrapper"><table class="dz-1046">
-        <thead><tr class="dz-1054">
-          <th class="dz-1047">עובד</th>
-          <th class="dz-pd-1048">מחלקה</th>
-          <th class="dz-pd-1048">מכסה</th>
-          <th class="dz-pd-1048">נוצל</th>
-          <th class="dz-1043">%</th>
-          <th class="dz-pd-1048">יתרה</th>
-          <th class="dz-1049">צפי סוף שנה</th>
+      <div class="table-wrapper"><table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:var(--surface2);">
+          <th style="padding:10px;text-align:right;">עובד</th>
+          <th style="padding:10px;">מחלקה</th>
+          <th style="padding:10px;">מכסה</th>
+          <th style="padding:10px;">נוצל</th>
+          <th style="padding:10px;min-width:100px;">%</th>
+          <th style="padding:10px;">יתרה</th>
+          <th style="padding:10px;font-size:11px;">צפי סוף שנה</th>
         </tr></thead><tbody>${rows}</tbody>
-      </table></div>` : '<p class="dz-1038">אין עובדים</p>';
+      </table></div>` : '<p style="color:var(--text-muted);font-size:14px;">אין עובדים</p>';
   }
 
   renderAuditLog();
@@ -2139,14 +1977,14 @@ function renderAuditLog() {
   const el = document.getElementById('auditLogList');
   if(!el) return;
   const log = (getDB().auditLog||[]).slice(0,50);
-  if(!log.length){el.innerHTML='<p class="dz-225">אין רשומות</p>';return;}
+  if(!log.length){el.innerHTML='<p style="color:var(--text-muted);font-size:13px;">אין רשומות</p>';return;}
   const icons={login:'🔑',logout:'👋',vacation_add:'✈️',vacation_remove:'❌',approval_approved:'✅',approval_rejected:'❌',settings_changed:'⚙️',quota_saved:'📊',employee_added:'👤',employee_deleted:'🗑️',payroll_export:'📤',monthly_report:'📄',vacation_request:'📨'};
   el.innerHTML=log.map(e=>{
     const d=new Date(e.ts);
     return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);">
       <span>${icons[e.action]||'📝'}</span>
-      <div class="dz-fs-1051"><strong>${e.user}</strong> <span style="color:var(--text-secondary);">${e.details||e.action}</span></div>
-      <span class="dz-1052">${d.toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+      <div style="flex:1;font-size:13px;"><strong>${e.user}</strong> <span style="color:var(--text-secondary);">${e.details||e.action}</span></div>
+      <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">${d.toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
     </div>`;
   }).join('');
 }
@@ -2204,7 +2042,7 @@ function exportPayroll() {
   a.download=`payroll_${fmt}_${prevYear}_${String(prevMonth).padStart(2,'0')}.csv`;
   a.click();URL.revokeObjectURL(url);
   auditLog('payroll_export',`ייצוא שכר ${monthNames[prevMonth-1]} ${prevYear} — פורמט: ${fmt}`);
-  
+  showToast(`📤 קובץ שכר יוצא — ${monthNames[prevMonth-1]} ${prevYear}`,'success');
 }
 
 function exportMonthlyReport() {
@@ -2224,7 +2062,7 @@ function exportMonthlyReport() {
   a.download=`monthly_report_${year}_${String(month).padStart(2,'0')}.csv`;
   a.click();URL.revokeObjectURL(url);
   auditLog('monthly_report',`דוח חודשי ${monthNames[month-1]} ${year}`);
-  
+  showToast('📄 דוח חודשי יוצא','success');
 }
 
 // ============================================================
@@ -2333,7 +2171,7 @@ function saveEmpSalary(username, val) {
   if (!db.users[username]) return;
   db.users[username].dailySalary = parseFloat(val) || 0;
   saveDB(db);
-  
+  showToast('💰 שכר יומי נשמר', 'success');
 }
 
 // ============================================================
@@ -2384,7 +2222,7 @@ function saveEmpBirthday(username, birthday) {
   if (!db.users[username]) return;
   db.users[username].birthday = birthday;
   saveDB(db);
-  
+  showToast('🎂 תאריך לידה נשמר', 'success');
 }
 
 function renderAdminVacations() {
@@ -2420,19 +2258,19 @@ function renderAdminVacations() {
         const total = full + half * 0.5;
         const payM = m >= 11 ? (m === 11 ? 0 : 1) : m;
         rows.push(`<tr>
-          <td class="dz-1013">${user.fullName}</td>
+          <td style="font-weight:700;">${user.fullName}</td>
           <td>${deptDisplay}</td>
           <td>${monthNames[m-1]}</td>
           <td>${full}</td>
           <td>${half}</td>
           <td style="font-weight:700;color:var(--primary);">${total}</td>
-          <td class="dz-97">${monthNames[payM]}</td>
+          <td style="font-size:12px;color:var(--text-muted);">${monthNames[payM]}</td>
         </tr>`);
       }
     }
   }
   
-  tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="7" class="dz-1053">אין נתונים להצגה</td></tr>';
+  tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">אין נתונים להצגה</td></tr>';
 }
 
 function clearAdminFilters() {
@@ -2501,7 +2339,7 @@ function saveQuota() {
   const dateLabel = balanceDateObj
     ? `${balanceDateObj.getDate()} ${monthNames[balanceDateObj.getMonth()]} ${balanceDateObj.getFullYear()}`
     : `01 ינואר ${year}`;
-  auditLog('quota_saved', `מכסה עודכנה ל-${db.users[emp].fullName}: ${annual} ימים`); 
+  auditLog('quota_saved', `מכסה עודכנה ל-${db.users[emp].fullName}: ${annual} ימים`); showToast(`✅ מכסה נשמרה: ${annual} ימים | יתרת פתיחה (01/01): ${carryOver.toFixed(2)}`, 'success');
   renderAdmin();
 }
 
@@ -2555,12 +2393,12 @@ function saveNewEmployee() {
   const errEl    = document.getElementById('addEmpError');
 
   if (!name || !username || !dept || !pass) {
-    errEl.textContent = 'נא למלא את כל השדות'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'נא למלא את כל השדות'; errEl.style.display = 'block'; return;
   }
 
   const db = getDB();
   if (db.users[username]) {
-    errEl.textContent = 'שם משתמש כבר קיים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'שם משתמש כבר קיים'; errEl.style.display = 'block'; return;
   }
 
   db.users[username] = {
@@ -2572,7 +2410,7 @@ function saveNewEmployee() {
   saveDB(db);
   closeModal('addEmpModal');
   auditLog('employee_added', `עובד חדש נוסף: ${name}`);
-  
+  showToast(`✅ עובד ${name} נוסף בהצלחה`, 'success');
   renderAdmin();
 }
 
@@ -2585,7 +2423,7 @@ function deleteEmployee(username) {
   delete db.vacations[username];
   saveDB(db);
   auditLog('employee_deleted', `עובד נמחק: ${name}`);
-  
+  showToast('🗑️ העובד נמחק', 'success');
   renderAdmin();
 }
 
@@ -2605,11 +2443,11 @@ function clearMonth() {
   saveDB(db);
   renderCalendar();
   renderDashboard();
-  
+  showToast('🗑️ החודש נוקה', 'success');
 }
 
 function submitVacationRequest() {
-  
+  showToast('📨 הבקשה נשלחה למנהל בהצלחה', 'success');
 }
 
 // ============================================================
@@ -2638,9 +2476,9 @@ function showToast(msg, type = 'success') {
   toast.textContent = msg;
   container.appendChild(toast);
   setTimeout(() => {
-    toast.classList.add('dz-fade-out');
-    toast.classList.add('dz-slide-out');
-    toast// transition via CSS class
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(20px)';
+    toast.style.transition = 'all 0.3s';
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
@@ -2713,7 +2551,7 @@ function addDeptFromMultiselect(containerId) {
   deptSelectedMap[containerId].add(name);
   renderDeptTags(containerId);
   initDeptMultiselect(containerId);
-  
+  showToast(`✅ מחלקה "${name}" נוספה`, 'success');
 }
 
 function renderDeptTags(containerId) {
@@ -2784,35 +2622,35 @@ function renderDeptManagerTable() {
   ).join('');
 
   if (!depts.length) {
-    el.innerHTML = '<p class="dz-225">אין מחלקות עדיין</p>';
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">אין מחלקות עדיין</p>';
     return;
   }
 
   el.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
-      <thead><tr class="dz-1054">
-        <th class="dz-1047">מחלקה</th>
-        <th class="dz-1047">מנהל/ת אחראי/ת לאישור חופשות</th>
-        <th class="dz-1047">עובדים</th>
-        <th class="dz-pd-1048"></th>
+      <thead><tr style="background:var(--surface2);">
+        <th style="padding:10px;text-align:right;">מחלקה</th>
+        <th style="padding:10px;text-align:right;">מנהל/ת אחראי/ת לאישור חופשות</th>
+        <th style="padding:10px;text-align:right;">עובדים</th>
+        <th style="padding:10px;"></th>
       </tr></thead>
       <tbody>
         ${depts.map(dept => {
           const managerUsername = deptManagers[dept] || '';
           const managerUser = managerUsername ? db.users[managerUsername] : null;
           const empCount = allUsers.filter(u => (u.dept||[]).includes ? (u.dept||[]).includes(dept) : u.dept===dept).length;
-          return `<tr class="dz-1134">
-            <td class="dz-1055">🏢 ${dept}</td>
-            <td class="dz-pd-1048">
-              <select onchange="setDeptManager('${dept}', this.value)" class="form-input" class="dz-1056" dir="rtl">
+          return `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;font-weight:700;">🏢 ${dept}</td>
+            <td style="padding:10px;">
+              <select onchange="setDeptManager('${dept}', this.value)" class="form-input" style="font-size:13px;padding:6px 10px;width:200px;" dir="rtl">
                 <option value="">— ללא מנהל מוגדר —</option>
                 ${allUsers.map(u => `<option value="${u.username}" ${u.username===managerUsername?'selected':''}>${u.fullName}</option>`).join('')}
               </select>
-              ${!managerUsername ? '<span class="dz-1057">⚠️ לא מוגדר</span>' : ''}
+              ${!managerUsername ? '<span style="color:var(--warning);font-size:11px;margin-right:6px;">⚠️ לא מוגדר</span>' : ''}
             </td>
             <td style="padding:10px;color:var(--text-secondary);">${empCount} עובדים</td>
-            <td class="dz-pd-1048">
-              <button onclick="removeDepartment('${dept}')" class="dz-1058" title="מחק מחלקה">×</button>
+            <td style="padding:10px;">
+              <button onclick="removeDepartment('${dept}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:18px;" title="מחק מחלקה">×</button>
             </td>
           </tr>`;
         }).join('')}
@@ -2826,7 +2664,7 @@ function setDeptManager(dept, username) {
   if (username) {
     db.deptManagers[dept] = username;
     const managerName = db.users[username]?.fullName || username;
-    
+    showToast(`✅ ${managerName} הוגדר/ה כמנהל/ת של ${dept}`, 'success');
     auditLog('dept_manager_set', `מנהל ${dept} הוגדר: ${managerName}`);
   } else {
     delete db.deptManagers[dept];
@@ -2871,7 +2709,7 @@ function addDepartment() {
   saveDB(db);
   input.value = '';
   renderDeptManagerTable();
-  
+  showToast(`✅ מחלקה "${name}" נוספה — הגדר מנהל בטבלה`, 'success');
 }
 
 function removeDepartment(name) {
@@ -2881,7 +2719,7 @@ function removeDepartment(name) {
   if (db.deptManagers) delete db.deptManagers[name];
   saveDB(db);
   renderDeptManagerTable();
-  
+  showToast(`🗑️ מחלקה "${name}" נמחקה`, 'success');
 }
 
 
@@ -2942,13 +2780,13 @@ function showExcelConfirm(rows) {
   let warningHtml = '';
   if (!isJan) {
     warningHtml = `
-      <div class="dz-card-1059">
+      <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;">
         ⚠️ <strong>שים לב!</strong> אתה טוען מכסות בחודש <strong>${currentMonthHe}</strong> ולא בינואר.<br>
         <strong>תאריך יתרה שישמר: 01/${String(currentMonthNum).padStart(2,'0')}/${year}</strong><br>
         יתרת סוף שנה תחושב: יתרה נוכחית + צבירה חודשית × ${12 - currentMonthNum} חודשים
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-          <label class="dz-flex-1060">
-            <input type="checkbox" id="excelMonthConfirm" class="dz-1061">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;">
+            <input type="checkbox" id="excelMonthConfirm" style="accent-color:var(--primary);width:16px;height:16px;">
             אני מאשר/ת שהמכסה הנוכחית מתייחסת ל-01 ${currentMonthHe} ${year}
           </label>
         </div>
@@ -2977,10 +2815,10 @@ function showExcelConfirm(rows) {
     const statusIcon = r.matched ? '✅' : '⚠️';
     const statusText = r.matched ? r.matched.fullName : 'לא נמצא';
     const statusColor = r.matched ? 'var(--success)' : 'var(--warning)';
-    return `<tr class="dz-1134">
-      <td class="dz-1062">${r.firstName} ${r.lastName}</td>
-      <td class="dz-1063">${r.annual}</td>
-      <td class="dz-1063">${r.currentQuota}</td>
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;font-size:13px;">${r.firstName} ${r.lastName}</td>
+      <td style="padding:8px;font-size:13px;text-align:center;">${r.annual}</td>
+      <td style="padding:8px;font-size:13px;text-align:center;">${r.currentQuota}</td>
       <td style="padding:8px;font-size:12px;color:${statusColor};">${statusIcon} ${statusText}</td>
     </tr>`;
   }).join('');
@@ -2989,14 +2827,14 @@ function showExcelConfirm(rows) {
   
   document.getElementById('quotaExcelConfirmBody').innerHTML = `
     ${warningHtml}
-    <p class="dz-1064">נמצאו <strong>${rows.length}</strong> שורות בקובץ, מתוכן <strong class="dz-clr-162">${matchCount}</strong> זוהו עובדים קיימים.</p>
-    <div class="dz-1065">
-      <table class="dz-1153">
-        <thead><tr class="dz-1054">
-          <th class="dz-1067">שם</th>
-          <th class="dz-1066">מכסה שנתית</th>
-          <th class="dz-1066">מכסה נוכחית</th>
-          <th class="dz-1067">זיהוי</th>
+    <p style="font-size:14px;margin-bottom:12px;">נמצאו <strong>${rows.length}</strong> שורות בקובץ, מתוכן <strong style="color:var(--success);">${matchCount}</strong> זוהו עובדים קיימים.</p>
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);">
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <thead><tr style="background:var(--surface2);">
+          <th style="padding:8px;text-align:right;">שם</th>
+          <th style="padding:8px;text-align:center;">מכסה שנתית</th>
+          <th style="padding:8px;text-align:center;">מכסה נוכחית</th>
+          <th style="padding:8px;text-align:right;">זיהוי</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
@@ -3048,7 +2886,7 @@ function applyExcelQuotas() {
   
   saveDB(db);
   closeModal('quotaExcelConfirmModal');
-  
+  showToast(`✅ מכסות עודכנו בהצלחה ל-${updated} עובדים`, 'success');
   document.getElementById('quotaExcelFileName').textContent = 'לא נבחר קובץ';
   document.getElementById('quotaExcelInput').value = '';
   renderAdmin();
@@ -3100,41 +2938,41 @@ function renderVacationForecast() {
   const avgPerMonth = monthsUsed > 0 ? (stats.total / monthsUsed).toFixed(1) : '0';
   
   el.innerHTML = `
-    <div class="dz-flex-194">
-      <div class="section-title" class="dz-mg-168"><span class="section-title-icon">🔮</span> תחזית חופשה</div>
-      <span class="dz-card-1070">${statusEmoji} ${statusText}</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="section-title" style="margin-bottom:0;"><span class="section-title-icon">🔮</span> תחזית חופשה</div>
+      <span style="background:${statusColor}22;color:${statusColor};padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;border:1px solid ${statusColor}44;">${statusEmoji} ${statusText}</span>
     </div>
     
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
-      <div class="dz-card-1071">
+      <div style="background:var(--primary-light);border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:22px;font-weight:800;color:var(--primary);">${accrued.toFixed(2)}</div>
-        <div class="dz-1072">צברתי עד כה</div>
+        <div style="font-size:11px;color:var(--text-secondary);">צברתי עד כה</div>
       </div>
       <div style="background:${currentBalance < 0 ? 'var(--danger-light)' : 'var(--success-light)'};border-radius:10px;padding:12px;text-align:center;">
-        <div class="dz-1073">${currentBalance.toFixed(2)}</div>
-        <div class="dz-1072">יתרה נוכחית</div>
+        <div style="font-size:22px;font-weight:800;color:${currentBalance < 0 ? 'var(--danger)' : 'var(--success)'};">${currentBalance.toFixed(2)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">יתרה נוכחית</div>
       </div>
-      <div class="dz-card-1074">
+      <div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:22px;font-weight:800;color:#d97706;">${recommended}</div>
-        <div class="dz-1072">ימים מומלצים/חודש</div>
+        <div style="font-size:11px;color:var(--text-secondary);">ימים מומלצים/חודש</div>
       </div>
       <div style="background:#f3e8ff;border-radius:10px;padding:12px;text-align:center;">
-        <div class="dz-1075">${avgPerMonth}</div>
-        <div class="dz-1072">ממוצע בפועל/חודש</div>
+        <div style="font-size:22px;font-weight:800;color:#7c3aed;">${avgPerMonth}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">ממוצע בפועל/חודש</div>
       </div>
     </div>
     
     <!-- Progress bar -->
-    <div class="dz-mg-1076">
+    <div style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">
         <span>ניצול מול צבירה (${stats.total} ניצול / ${accrued.toFixed(2)} נצבר)</span>
         <span>${Math.round(stats.total / Math.max(1, accrued) * 100)}%</span>
       </div>
-      <div class="dz-1077">
+      <div style="height:10px;background:var(--border);border-radius:10px;overflow:hidden;">
         <div style="height:100%;width:${Math.min(100, stats.total / Math.max(0.01, accrued) * 100)}%;background:${stats.total > accrued ? 'var(--danger)' : 'var(--primary)'};border-radius:10px;transition:width 0.5s;"></div>
       </div>
     </div>
-    <div class="dz-97">
+    <div style="font-size:12px;color:var(--text-muted);">
       📅 נותרו כ-${remainingWorkDays} ימי עבודה השנה &nbsp;|&nbsp; 
       🎯 יתרה צפויה בסוף שנה: <strong style="color:${projectedEndBalance < 0 ? 'var(--danger)' : 'var(--success)'};">${projectedEndBalance.toFixed(2)} ימים</strong> &nbsp;|&nbsp;
       ✈️ ניתן לנצל עוד ${Math.max(0, currentBalance).toFixed(2)} ימים כיום
@@ -3157,7 +2995,7 @@ function setTheme(theme, el) {
   if (!db.settings) db.settings = {};
   db.settings.theme = theme;
   saveDB(db);
-  
+  showToast('🎨 צבע הממשק עודכן לכל המשתמשים', 'success');
 }
 
 // Load theme — from DB first (company-wide), fallback to localStorage
@@ -3201,7 +3039,7 @@ function doResetPassword() {
   db.users[passwordTargetUser].password = hashPass(newPass);
   saveDB(db);
   closeModal('resetPasswordModal');
-  
+  showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} אופסה בהצלחה`, 'success');
 }
 
 function openChangePasswordModal(username) {
@@ -3230,7 +3068,7 @@ function doChangeEmpPassword() {
   db.users[passwordTargetUser].password = hashPass(p1);
   saveDB(db);
   closeModal('changeEmpPasswordModal');
-  
+  showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} שונתה בהצלחה`, 'success');
 }
 
 function changeAdminPassword() {
@@ -3260,7 +3098,7 @@ function changeAdminPassword() {
   document.getElementById('adminCurrentPass').value = '';
   document.getElementById('adminNewPass').value = '';
   document.getElementById('adminNewPass2').value = '';
-  
+  showToast('✅ סיסמת ADMIN שונתה בהצלחה! שמור אותה במקום בטוח.', 'success');
 }
 
 // ============================================================
@@ -3271,7 +3109,7 @@ function confirmSubmitRequest() {
   closeModal('submitModal');
   doSubmitRequest(note);
   updateApprovalStatusBadge();
-  
+  showToast('📨 הבקשה נשלחה למנהל', 'success');
 }
 
 function updateApprovalStatusBadge() {
@@ -3296,27 +3134,27 @@ function updateApprovalStatusBadge() {
 
   if(req.status === 'pending') {
     badge.textContent = '⏳ ממתין לאישור';
-    badge.classList.add('dz-status-warning');
-    badge// color via dz-status-warning
-    badge// border via dz-status-warning
+    badge.style.background = '#fef3c7';
+    badge.style.color = '#92400e';
+    badge.style.border = '1px solid #fbbf24';
     if(btn) btn.textContent = '🔄 שלח מחדש';
   } else if(req.status === 'approved') {
     badge.textContent = '✅ אושר';
-    badge.classList.add('dz-status-success');
-    badge// color via dz-status-success
-    badge// border via dz-status-success
+    badge.style.background = 'var(--success-light)';
+    badge.style.color = '#14532d';
+    badge.style.border = '1px solid var(--success)';
     if(btn) btn.style.display = 'none';
   } else if(req.status === 'rejected') {
     badge.textContent = `❌ נדחה${req.rejectReason ? ' — ' + req.rejectReason : ''}`;
-    badge.classList.add('dz-status-danger');
-    badge// color via dz-status-danger
-    badge// border via dz-status-danger
+    badge.style.background = 'var(--danger-light)';
+    badge.style.color = '#7f1d1d';
+    badge.style.border = '1px solid #fca5a5';
     if(btn) btn.textContent = '📨 שלח מחדש';
   } else if(req.status === 'changed') {
     badge.textContent = '⚠️ הימים השתנו — יש לשלוח מחדש';
-    badge.classList.add('dz-status-orange');
-    badge// color via dz-status-orange
-    badge// border via dz-status-orange
+    badge.style.background = '#fff7ed';
+    badge.style.color = '#9a3412';
+    badge.style.border = '1px solid #fb923c';
     if(btn) btn.textContent = '📨 שלח לאישור מחדש';
   }
 }
@@ -3419,7 +3257,7 @@ function renderPermissionsTable() {
   ).sort((a, b) => a.fullName.localeCompare(b.fullName));
 
   if (!users.length) {
-    el.innerHTML = '<div class="dz-225">אין עובדים להצגה</div>';
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">אין עובדים להצגה</div>';
     return;
   }
 
@@ -3428,13 +3266,13 @@ function renderPermissionsTable() {
   el.innerHTML = `
     <table style="border-collapse:collapse;width:100%;font-size:12px;min-width:600px;">
       <thead>
-        <tr class="dz-1054">
+        <tr style="background:var(--surface2);">
           <th style="padding:10px 12px;text-align:right;font-size:13px;min-width:140px;">עובד / מנהל</th>
-          <th class="dz-1078">גישה לניהול</th>
+          <th style="padding:10px 8px;text-align:center;font-size:11px;min-width:50px;">גישה לניהול</th>
           ${grantableSections.map(s => `
             <th style="padding:10px 6px;text-align:center;font-size:10px;max-width:80px;white-space:normal;line-height:1.3;">${s.label}</th>
           `).join('')}
-          <th class="dz-1079">שמור</th>
+          <th style="padding:10px 8px;text-align:center;">שמור</th>
         </tr>
       </thead>
       <tbody>
@@ -3442,13 +3280,13 @@ function renderPermissionsTable() {
           const perms = getUserPermissions(u.username);
           const hasAny = grantableSections.some(s => perms[s.key]);
           return `
-            <tr class="dz-1134" id="permRow_${u.username}">
-              <td class="dz-pd-1080">
-                <div class="dz-1013">${u.fullName}</div>
-                <div class="dz-12">${u.role === 'manager' ? '👔 מנהל' : '👤 עובד'} · ${Array.isArray(u.dept) ? u.dept[0] : u.dept || ''}</div>
+            <tr style="border-bottom:1px solid var(--border);" id="permRow_${u.username}">
+              <td style="padding:10px 12px;">
+                <div style="font-weight:700;">${u.fullName}</div>
+                <div style="font-size:11px;color:var(--text-muted);">${u.role === 'manager' ? '👔 מנהל' : '👤 עובד'} · ${Array.isArray(u.dept) ? u.dept[0] : u.dept || ''}</div>
               </td>
-              <td class="dz-1079">
-                <span class="dz-card-1081">
+              <td style="padding:10px 8px;text-align:center;">
+                <span style="font-size:11px;padding:3px 8px;border-radius:10px;font-weight:700;background:${hasAny ? 'var(--success-light)' : 'var(--surface2)'};color:${hasAny ? 'var(--success)' : 'var(--text-muted)'};">
                   ${hasAny ? '✅ יש' : '—'}
                 </span>
               </td>
@@ -3457,14 +3295,14 @@ function renderPermissionsTable() {
                   <input type="checkbox"
                     id="perm_${u.username}_${s.key}"
                     ${perms[s.key] ? 'checked' : ''}
-                    class="dz-1082"
+                    style="width:16px;height:16px;cursor:pointer;"
                     onchange="onPermCheckChange('${u.username}')">
                 </td>
               `).join('')}
-              <td class="dz-1079">
+              <td style="padding:10px 8px;text-align:center;">
                 <button onclick="savePermRow('${u.username}')"
                   class="btn btn-primary"
-                  class="dz-card-1083">
+                  style="padding:6px 14px;font-size:12px;border-radius:8px;">
                   💾
                 </button>
               </td>
@@ -3494,7 +3332,7 @@ function quickGrantPermission() {
   saveUserPermissions(username, perms);
   const db   = getDB();
   const name = db.users[username]?.fullName || username;
-  
+  showToast(`✅ הרשאות הוענקו ל${name}`, 'success');
   auditLog('permissions_update', `הרשאת ${level} הוענקה ל${username}`);
   renderPermissionsTable();
 }
@@ -3515,7 +3353,7 @@ function populateQuickPermUser() {
 
 
 function onPermCheckChange(username) {
-  if (row) row.classList.add('dz-status-info');
+  if (row) row.style.background = 'var(--warning-light)';
 }
 
 function savePermRow(username) {
@@ -3528,12 +3366,12 @@ function savePermRow(username) {
   saveUserPermissions(username, perms);
 
   const row = document.getElementById('permRow_' + username);
-  if (row) row.classList.add('dz-status-success');
-  setTimeout(() => { if (row) row.classList.remove('dz-status-warning','dz-status-success','dz-status-danger','dz-status-orange','dz-status-info','dz-toggle-on','dz-toggle-off'); }, 1500);
+  if (row) row.style.background = 'var(--success-light)';
+  setTimeout(() => { if (row) row.style.background = ''; }, 1500);
 
   const db = getDB();
   const name = db.users[username]?.fullName || username;
-  
+  showToast(`✅ הרשאות של ${name} נשמרו`, 'success');
   auditLog('permissions_update', `עודכנו הרשאות של ${username}`);
 
   // Re-render the access indicator column
@@ -3559,15 +3397,6 @@ function isCeoUser() {
   return currentUser && currentUser.username === CEO_USERNAME;
 }
 
-
-function enterCeoTimeclock() {
-  document.getElementById('ceoDashboardScreen').classList.remove('active');
-  enterModule('timeclock');
-}
-function enterCeoVacation() {
-  document.getElementById('ceoDashboardScreen').classList.remove('active');
-  enterModule('vacation');
-}
 function showCeoDashboard() {
   ['loginScreen','appScreen','timeClockScreen','moduleSelectorScreen','forcePasswordScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
@@ -3575,7 +3404,6 @@ function showCeoDashboard() {
   document.getElementById('ceoDashboardScreen').classList.add('active');
   loadTheme();
   populateCeoDashboard();
-  setTimeout(() => initCeoAiChat(), 300);
   setTimeout(checkBirthdays, 800);
   // Check handover for tomorrow's vacationers
   checkHandoverNeeded();
@@ -3590,49 +3418,118 @@ function exitCeoDashboard() {
 function populateCeoDashboard() {
   const db    = getDB();
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
   const days  = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const months= ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+  // Greeting
   const h = today.getHours();
   const greeting = h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : 'ערב טוב';
+  document.getElementById('ceoGreeting').textContent = `${greeting}, ${currentUser.fullName} ☀️`;
+  document.getElementById('ceoDate').textContent = `יום ${days[today.getDay()]}, ${today.getDate()} ב${months[today.getMonth()]} ${today.getFullYear()}`;
 
-  // New UI elements
-  const s = getSettings();
-  const cnEl = document.getElementById('ceoCompanyName');
-  if (cnEl) cnEl.textContent = (s.companyName && s.companyName !== 'החברה שלי') ? s.companyName : 'Dazura';
-  const dlEl = document.getElementById('ceoDateLine');
-  if (dlEl) dlEl.textContent = 'יום ' + days[today.getDay()] + ' · ' + today.getDate() + ' ' + months[today.getMonth()] + ' ' + today.getFullYear();
-  const wtEl = document.getElementById('ceoWelcomeText');
-  if (wtEl) wtEl.innerHTML = '👋 ' + greeting + ', <span class="dz-grad-1084">' + currentUser.fullName + '</span>';
-
-  // Stats row
-  const allUsers = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
-  let offCount = 0, wfhCount = 0;
+  // ===== CARD 1: TODAY =====
+  const todayStr  = today.toISOString().split('T')[0];
+  let offCount=0, wfhCount=0, todayBdays=[];
+  const allUsers  = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
   allUsers.forEach(u => {
     const vacs = getVacations(u.username);
     const type = vacs[todayStr];
     if (type === 'full' || type === 'half') offCount++;
     if (type === 'wfh') wfhCount++;
+    if (u.birthday) {
+      const parts = u.birthday.split('-');
+      if (parts.length===3) {
+        const mm = String(today.getMonth()+1).padStart(2,'0');
+        const dd = String(today.getDate()).padStart(2,'0');
+        if (`${parts[1]}-${parts[2]}` === `${mm}-${dd}`) todayBdays.push(u.fullName);
+      }
+    }
   });
-  const sickCount    = Object.values(db.sick || {}).filter(s => s.date === todayStr).length;
-  const pendingCount = (db.approvalRequests || []).filter(r => r.status === 'pending').length;
-  const srEl = document.getElementById('ceoStatsRow');
-  if (srEl) {
-    srEl.innerHTML =
-      '<div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">' + sickCount  + '</div><div class="stat-lbl">חולה</div></div>' +
-      '<div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">' + offCount   + '</div><div class="stat-lbl">חופשה</div></div>' +
-      '<div class="ms-stat-pill"><div class="stat-ico">🏠</div><div class="stat-num">' + wfhCount   + '</div><div class="stat-lbl">WFH</div></div>' +
-      '<div class="ms-stat-pill"><div class="stat-ico">⏳</div><div class="stat-num">' + pendingCount + '</div><div class="stat-lbl">ממתין</div></div>';
+  const pendingCount = (db.approvalRequests||[]).filter(r=>r.status==='pending').length;
+  let todayText = `👤 ${allUsers.length} עובדים פעילים\n🏖️ ${offCount} בחופשה היום • 🏠 ${wfhCount} מהבית`;
+  if (todayBdays.length) todayText += `\n🎂 יום הולדת: ${todayBdays.join(' + ')}`;
+  if (pendingCount) todayText += `\n⏳ ${pendingCount} בקשות ממתינות לאישור`;
+  document.getElementById('ceoTodayText').style.whiteSpace = 'pre-line';
+  document.getElementById('ceoTodayText').textContent = todayText;
+  // Update pending button
+  document.getElementById('ceoPendingBtn').textContent = `⏳ בקשות ממתינות (${pendingCount})`;
+
+  // Announcement ack summary in today card
+  const latestAnn = (db.announcements||[])[0];
+  if (latestAnn && latestAnn.acks) {
+    const totalEmp = allUsers.length;
+    const ackCount = Object.keys(latestAnn.acks).length;
+    todayText += `\n📢 הודעה אחרונה: ${ackCount}/${totalEmp} אישרו קריאה`;
   }
 
-  // Legacy hidden elements (JS compat)
-  const legG = document.getElementById('ceoGreeting');
-  if (legG) legG.textContent = greeting + ', ' + currentUser.fullName;
+  document.getElementById('ceoTodayText').textContent = todayText;
+  // Check next 7 days dept load
+  let riskLines = [];
+  const depts = db.departments || [];
+  depts.forEach(dept => {
+    const deptUsers = allUsers.filter(u => {
+      const d = Array.isArray(u.dept) ? u.dept : [u.dept||''];
+      return d.includes(dept);
+    });
+    if (deptUsers.length < 2) return;
+    let busyNext7 = 0;
+    for (let i=0; i<7; i++) {
+      const d = new Date(today); d.setDate(d.getDate()+i);
+      const ds = d.toISOString().split('T')[0];
+      deptUsers.forEach(u => {
+        const t = getVacations(u.username)[ds];
+        if (t === 'full' || t === 'half' || t === 'wfh') busyNext7++;
+      });
+    }
+    const avgPerDay = busyNext7 / 7;
+    const pct = Math.round((avgPerDay / deptUsers.length) * 100);
+    if (pct >= 30) riskLines.push({ dept, pct, size: deptUsers.length });
+  });
+  riskLines.sort((a,b) => b.pct - a.pct);
+  if (riskLines.length) {
+    const top = riskLines[0];
+    document.getElementById('ceoRiskText').style.whiteSpace = 'pre-line';
+    document.getElementById('ceoRiskText').textContent =
+      `⚠️ ${top.dept}: ${top.pct}% מהצוות (${top.size} עובדים) בחופש/WFH שבוע הבא\n💡 המלצה: בדוק פרויקטים קריטיים ושקול דחיית אישורים`
+      + (riskLines.length>1 ? `\n+ ${riskLines.length-1} מחלקות נוספות בסיכון בינוני` : '');
+  } else {
+    document.getElementById('ceoRiskText').textContent = '✅ אין סיכון משמעותי השבוע — הצוות זמין!';
+  }
 
-  // Init AI chat
-  if (typeof initCeoAiChat === 'function') initCeoAiChat();
+  // ===== CARD 3: COST =====
+  const curMonth = today.getMonth()+1;
+  const curYear  = today.getFullYear();
+  let vacCost = 0, wfhDays = 0, vacDays = 0;
+  allUsers.forEach(u => {
+    const dailySalary = u.dailySalary || 850; // fallback to average
+    const vacs = getVacations(u.username);
+    Object.entries(vacs).forEach(([dt, type]) => {
+      if (!dt.startsWith(`${curYear}-${String(curMonth).padStart(2,'0')}`)) return;
+      if (type === 'full')       { vacDays++; vacCost += dailySalary; }
+      else if (type === 'half')  { vacDays += 0.5; vacCost += dailySalary * 0.5; }
+      else if (type === 'wfh')   { wfhDays++; }
+    });
+  });
+  const wfhSave = Math.round(wfhDays * 850 * 0.3);
+  document.getElementById('ceoCostText').textContent =
+    `📅 חופשות: ${vacDays} ימים — עלות ₪${Math.round(vacCost).toLocaleString()}\n🏠 WFH: ${wfhDays} ימים — חיסכון משוער ₪${wfhSave.toLocaleString()}\n💡 מבוסס על שכר יומי אישי לכל עובד`;
+
+  // ===== CARD 4: BURNOUT =====
+  const ninetyDaysAgo = new Date(today); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate()-90);
+  const burnoutRisk = allUsers.filter(u => {
+    const vacs = getVacations(u.username);
+    const vacLast90 = Object.entries(vacs).filter(([dt]) => new Date(dt) >= ninetyDaysAgo).length;
+    return vacLast90 === 0;
+  });
+  document.getElementById('ceoBurnoutText').style.whiteSpace = 'pre-line';
+  if (burnoutRisk.length) {
+    const names = burnoutRisk.slice(0,3).map(u=>u.fullName).join(', ');
+    document.getElementById('ceoBurnoutText').textContent =
+      `🚨 ${burnoutRisk.length} עובדים ללא חופשה ב-90 יום האחרונים:\n${names}${burnoutRisk.length>3?' ועוד...':''}\n💡 שקול שיחה אישית או חופשה כפויה`;
+  } else {
+    document.getElementById('ceoBurnoutText').textContent = '✅ כל העובדים לקחו חופשה ב-90 הימים האחרונים';
+  }
 }
-
 
 function openCeoDayView() {
   const db    = getDB();
@@ -3652,11 +3549,11 @@ function openCeoDayView() {
   });
 
   const section = (title, icon, color, users) => users.length ? `
-    <div class="dz-mg-188">
+    <div style="margin-bottom:16px;">
       <div style="font-weight:700;font-size:13px;color:${color};margin-bottom:8px;">${icon} ${title} (${users.length})</div>
-      ${users.map(u=>`<div class="dz-flex-1086">
+      ${users.map(u=>`<div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:4px;font-size:13px;">
         <span style="font-weight:600;">${u.fullName}</span>
-        <span class="dz-clr-1087">${u.dept}</span>
+        <span style="color:var(--text-muted);">${u.dept}</span>
       </div>`).join('')}
     </div>` : '';
 
@@ -3698,7 +3595,7 @@ function sendCeoMessage() {
   db.announcements.unshift(ann);
   saveDB(db);
   closeModal('ceoMessageModal');
-  
+  showToast('📢 ההודעה נשלחה לכל הצוות', 'success');
   auditLog('announcement_sent', `${currentUser.fullName} שלח הודעה: ${text.substring(0,50)}`);
 }
 
@@ -3735,7 +3632,7 @@ function saveHandover() {
   };
   saveDB(db);
   closeModal('handoverModal');
-  
+  showToast('✅ פרוטוקול העברת מקל נשמר ונשלח למנהל', 'success');
   auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
 }
 
@@ -3752,20 +3649,20 @@ function toggleSickMode(checked) {
   const normalOpts = document.getElementById('dayModalOptions');
   const sickOpts   = document.getElementById('sickModeOptions');
   if (checked) {
-    track.classList.add('dz-bg-danger-solid');
-    thumb.classList.add('dz-toggle-thumb-on'); thumb.classList.remove('dz-toggle-thumb-off');
+    track.style.background = '#ef4444';
+    thumb.style.left = '25px';
     normalOpts.style.display = 'none';
     sickOpts.style.display   = 'flex';
     sickOpts.innerHTML = `
-      <button onclick="saveSickDay('${_currentDayModalDate}','full')" class="dz-card-1088">
+      <button onclick="saveSickDay('${_currentDayModalDate}','full')" style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:14px 18px;font-size:14px;font-weight:700;color:#991b1b;cursor:pointer;font-family:'Heebo',sans-serif;text-align:right;">
         🤒 יום מחלה מלא
       </button>
-      <button onclick="saveSickDay('${_currentDayModalDate}','half')" class="dz-card-1089">
+      <button onclick="saveSickDay('${_currentDayModalDate}','half')" style="background:#fef2f2;border:2px solid #f87171;border-radius:12px;padding:14px 18px;font-size:14px;font-weight:700;color:#991b1b;cursor:pointer;font-family:'Heebo',sans-serif;text-align:right;">
         🤒 חצי יום מחלה
       </button>`;
   } else {
-    track.classList.add('dz-toggle-off'); el2.classList.remove('dz-toggle-on');
-    thumb.classList.add('dz-toggle-thumb-off'); thumb.classList.remove('dz-toggle-thumb-on');
+    track.style.background = '#e5e7eb';
+    thumb.style.left = '3px';
     normalOpts.style.display = 'flex';
     sickOpts.style.display   = 'none';
   }
@@ -3784,7 +3681,7 @@ function saveSickDay(dateStr, type) {
   saveDB(db);
   closeModal('dayModal');
   renderCalendar();
-  
+  showToast('🤒 דיווח מחלה נשמר', 'info');
   auditLog('sick_report', `${currentUser.fullName} דיווח מחלה ל-${dateStr}`);
   updateSickCount();
 }
@@ -3794,7 +3691,7 @@ function reportSickToday() {
   const db = getDB();
   if (!db.sick) db.sick = {};
   const key = currentUser.username + '_' + today;
-  if (db.sick[key]) {  return; }
+  if (db.sick[key]) { showToast('כבר דיווחת מחלה היום', 'info'); return; }
   db.sick[key] = {
     username: currentUser.username, fullName: currentUser.fullName,
     dept: Array.isArray(currentUser.dept) ? currentUser.dept[0] : (currentUser.dept || ''),
@@ -3802,7 +3699,7 @@ function reportSickToday() {
   };
   saveDB(db);
   closeModal('sickTodayModal');
-  
+  showToast('🤒 דיווח מחלה נשמר', 'info');
   auditLog('sick_report', `${currentUser.fullName} דיווח מחלה להיום`);
   updateSickCount();
 }
@@ -3816,15 +3713,15 @@ function openSickTodayFromSelector() {
   document.getElementById('sickTodayDate').textContent = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
   const list = document.getElementById('sickTodayList');
   if (!sick.length) {
-    list.innerHTML = '<div class="dz-1053">✅ אין דיווחי מחלה להיום</div>';
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;">✅ אין דיווחי מחלה להיום</div>';
   } else {
     list.innerHTML = sick.map(s => `
-      <div class="dz-flex-1090">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#fef2f2;border-radius:10px;margin-bottom:6px;border:1px solid #fca5a5;">
         <div>
-          <div class="dz-1117">🤒 ${s.fullName}</div>
-          <div class="dz-12">${s.dept} · ${s.type === 'full' ? 'יום מלא' : 'חצי יום'}</div>
+          <div style="font-weight:700;font-size:13px;">🤒 ${s.fullName}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${s.dept} · ${s.type === 'full' ? 'יום מלא' : 'חצי יום'}</div>
         </div>
-        <div class="dz-12">${new Date(s.reportedAt).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${new Date(s.reportedAt).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>`).join('');
   }
   openModal('sickTodayModal');
@@ -3850,7 +3747,7 @@ function reportDailyStatus(status) {
   saveDB(db);
   loadDailyStatusWidget();
   const labels = { office:'🏢 במשרד', home:'🏠 מהבית', out:'🚗 בחוץ' };
-  
+  showToast(`✅ ${labels[status]} — הסטטוס עודכן`, 'success');
 }
 
 function loadDailyStatusWidget() {
@@ -3863,21 +3760,21 @@ function loadDailyStatusWidget() {
     const btn = document.getElementById(`dsBtn_${s}`);
     if (!btn) return;
     if (s === current) {
-      /* dynamic: color varies by vacation type (colors[s]) */
+      btn.style.background = colors[s];
       btn.style.borderColor = colors[s];
-      btn.style.background = colors[s] + '22';
-      btn.classList.add('dz-day-status-active');
+      btn.style.color = 'white';
+      btn.style.transform = 'scale(1.04)';
     } else {
-      btn.classList.remove('dz-day-status-active');
-      btn.style.borderColor = '';
-      btn.style.background = '';
-      btn.classList.remove('dz-card-hover');
+      btn.style.background = 'white';
+      btn.style.borderColor = 'var(--border)';
+      btn.style.color = 'var(--text)';
+      btn.style.transform = '';
     }
   });
 }
 function openWhereIsEmployee() {
   document.getElementById('whereIsSearch').value = '';
-  document.getElementById('whereIsResults').innerHTML = '<div class="dz-1091">הקלד לפחות 2 תווים לחיפוש...</div>';
+  document.getElementById('whereIsResults').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">הקלד לפחות 2 תווים לחיפוש...</div>';
   openModal('whereIsModal');
   setTimeout(() => document.getElementById('whereIsSearch').focus(), 200);
 }
@@ -3923,7 +3820,7 @@ function renderWhereIsResults() {
 
   // Show nothing until user types
   if (query.length < 2) {
-    container.innerHTML = '<div class="dz-1091">הקלד לפחות 2 תווים לחיפוש...</div>';
+    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">הקלד לפחות 2 תווים לחיפוש...</div>';
     return;
   }
 
@@ -3936,7 +3833,7 @@ function renderWhereIsResults() {
   ).sort((a,b) => a.fullName.localeCompare(b.fullName));
 
   if (!users.length) {
-    container.innerHTML = '<div class="dz-1091">לא נמצאו עובדים תואמים</div>';
+    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">לא נמצאו עובדים תואמים</div>';
     return;
   }
 
@@ -3944,12 +3841,12 @@ function renderWhereIsResults() {
     const s = getEmployeeStatusToday(u.username);
     const dept = Array.isArray(u.dept) ? u.dept[0] : u.dept || '';
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:${s.bg};border-radius:12px;border:1px solid ${s.color}22;">
-      <div class="dz-flex-1092">${s.label.split(' ')[0]}</div>
+      <div style="width:38px;height:38px;border-radius:50%;background:${s.color}22;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${s.label.split(' ')[0]}</div>
       <div style="flex:1;min-width:0;">
-        <div class="dz-1093">${u.fullName}</div>
-        <div class="dz-12">${dept}</div>
+        <div style="font-weight:700;font-size:14px;color:var(--text);">${u.fullName}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${dept}</div>
       </div>
-      <div class="dz-1094">${s.label.split(' ').slice(1).join(' ')}</div>
+      <div style="font-size:12px;font-weight:700;color:${s.color};white-space:nowrap;">${s.label.split(' ').slice(1).join(' ')}</div>
     </div>`;
   }).join('');
 }
@@ -3963,7 +3860,7 @@ function openCeoAnnouncementsModal() {
   const ann = db.announcements || [];
   const list = document.getElementById('ceoAnnouncementsList');
   if (!ann.length) {
-    list.innerHTML = '<div class="dz-1053">אין הודעות עדיין</div>';
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;">אין הודעות עדיין</div>';
   } else {
     list.innerHTML = ann.map(a => {
       const d = new Date(a.ts);
@@ -3972,15 +3869,15 @@ function openCeoAnnouncementsModal() {
       const total    = allUsers.length;
       const pct      = total > 0 ? Math.round(ackCount / total * 100) : 0;
       return `
-        <div class="dz-card-1095">
+        <div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
-            <div class="dz-1096">${a.text}</div>
-            <button onclick="deleteAnnouncement('${a.id}')" class="dz-card-1097">🗑️ מחק</button>
+            <div style="font-size:13px;font-weight:700;color:var(--text);flex:1;">${a.text}</div>
+            <button onclick="deleteAnnouncement('${a.id}')" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">🗑️ מחק</button>
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">מאת: ${a.from} · ${dateStr}</div>
-          <div class="dz-card-1098">
+          <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
             <div style="font-size:12px;font-weight:700;margin-bottom:4px;">אישורי קריאה: ${ackCount}/${total} (${pct}%)</div>
-            <div class="dz-1099">
+            <div style="background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden;">
               <div style="background:var(--success);height:100%;width:${pct}%;transition:width 0.5s;border-radius:4px;"></div>
             </div>
           </div>
@@ -3996,7 +3893,7 @@ function deleteAnnouncement(id) {
   db.announcements = (db.announcements || []).filter(a => a.id !== id);
   saveDB(db);
   openCeoAnnouncementsModal();
-  
+  showToast('🗑️ ההודעה נמחקה', 'info');
 }
 
 // ============================================================
@@ -4080,7 +3977,7 @@ function clearAuditLog() {
   db.auditLog = [];
   saveDB(db);
   renderAuditLog();
-  
+  showToast('🗑️ יומן השינויים נמחק', 'info');
 }
 
 // ============================================================
@@ -4138,7 +4035,7 @@ function openBulkImportModal() {
 
 function handleBulkDrop(e) {
   e.preventDefault();
-  document.getElementById('bulkDropZone')// via dz-card-hover
+  document.getElementById('bulkDropZone').style.borderColor = 'var(--border)';
   const file = e.dataTransfer.files[0];
   if (file) parseBulkFile(file);
 }
@@ -4229,37 +4126,37 @@ async function parseBulkFile(file) {
       const newCount    = parsed.filter(p => !p.isUpdate).length;
       const updateCount = parsed.filter(p => p.isUpdate).length;
       summaryEl.innerHTML =
-        `<span class="dz-clr-162">✅ ${newCount} עובדים חדשים</span>` +
+        `<span style="color:var(--success);">✅ ${newCount} עובדים חדשים</span>` +
         (updateCount ? `<span style="color:var(--primary);margin-right:12px;">🔄 ${updateCount} יעודכנו</span>` : '') +
-        (errors.length ? `<span class="dz-1101">⚠️ ${errors.length} שגיאות</span>` : '');
+        (errors.length ? `<span style="color:var(--danger);margin-right:12px;">⚠️ ${errors.length} שגיאות</span>` : '');
 
       const year = new Date().getFullYear();
       tableEl.innerHTML = `
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr class="dz-1054">
-            <th class="dz-1102">שם מלא</th>
-            <th class="dz-1102">משתמש</th>
-            <th class="dz-1102">מחלקה</th>
-            <th class="dz-1103">מכסה ${year}</th>
-            <th class="dz-1103">יתרה</th>
-            <th class="dz-1103">שכר יומי</th>
-            <th class="dz-1103">יום הולדת</th>
-            <th class="dz-1103">סטטוס</th>
+          <thead><tr style="background:var(--surface2);">
+            <th style="padding:6px 8px;text-align:right;">שם מלא</th>
+            <th style="padding:6px 8px;text-align:right;">משתמש</th>
+            <th style="padding:6px 8px;text-align:right;">מחלקה</th>
+            <th style="padding:6px 8px;text-align:center;">מכסה ${year}</th>
+            <th style="padding:6px 8px;text-align:center;">יתרה</th>
+            <th style="padding:6px 8px;text-align:center;">שכר יומי</th>
+            <th style="padding:6px 8px;text-align:center;">יום הולדת</th>
+            <th style="padding:6px 8px;text-align:center;">סטטוס</th>
           </tr></thead>
           <tbody>
-            ${parsed.map(p => `<tr class="dz-1134">
-              <td class="dz-1104">${p.fullName}</td>
+            ${parsed.map(p => `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:6px 8px;font-weight:600;">${p.fullName}</td>
               <td style="padding:6px 8px;color:var(--primary);direction:ltr;">${p.username}</td>
-              <td class="dz-pd-1105">${p.dept}</td>
-              <td class="dz-1103">${p.annual !== null ? p.annual : '—'}</td>
-              <td class="dz-1103">${p.balance !== null ? p.balance : '—'}</td>
-              <td class="dz-1103">${p.salary !== null ? '₪' + p.salary : '—'}</td>
-              <td class="dz-1103">${p.birthday ? p.birthday.split('-').reverse().join('/') : '—'}</td>
-              <td class="dz-1103">${p.isUpdate
-                ? '<span class="dz-1106">🔄 עדכון</span>'
+              <td style="padding:6px 8px;">${p.dept}</td>
+              <td style="padding:6px 8px;text-align:center;">${p.annual !== null ? p.annual : '—'}</td>
+              <td style="padding:6px 8px;text-align:center;">${p.balance !== null ? p.balance : '—'}</td>
+              <td style="padding:6px 8px;text-align:center;">${p.salary !== null ? '₪' + p.salary : '—'}</td>
+              <td style="padding:6px 8px;text-align:center;">${p.birthday ? p.birthday.split('-').reverse().join('/') : '—'}</td>
+              <td style="padding:6px 8px;text-align:center;">${p.isUpdate
+                ? '<span style="color:var(--primary);font-size:11px;">🔄 עדכון</span>'
                 : '<span style="color:var(--success);font-size:11px;">✨ חדש</span>'}</td>
             </tr>`).join('')}
-            ${errors.map(e => `<tr class="dz-1107"><td colspan="6" class="dz-1108">${e}</td></tr>`).join('')}
+            ${errors.map(e => `<tr style="background:var(--danger-light);"><td colspan="6" style="padding:6px 8px;color:var(--danger);font-size:11px;">${e}</td></tr>`).join('')}
           </tbody>
         </table>`;
 
@@ -4442,7 +4339,7 @@ function saveTempPassword() {
   if (!db.settings) db.settings = {};
   db.settings.tempPassword = val;
   saveDB(db);
-  
+  showToast('✅ סיסמה זמנית נשמרה', 'success');
 }
 
 // ============================================================
@@ -4466,11 +4363,11 @@ function doForcePasswordChange() {
 
   if (pass.length < 4) {
     errEl.textContent = 'הסיסמה חייבת להיות לפחות 4 תווים';
-    errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.style.display = 'block'; return;
   }
   if (pass !== pass2) {
     errEl.textContent = 'הסיסמאות אינן תואמות';
-    errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.style.display = 'block'; return;
   }
 
   const db = getDB();
@@ -4484,7 +4381,7 @@ function doForcePasswordChange() {
   pushToFirebase();
   currentUser = null;
   document.getElementById('forcePasswordScreen').classList.remove('active');
-  
+  showToast('✅ סיסמה עודכנה! התחבר עם הסיסמה החדשה.', 'success');
   // Return to login screen
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginUsername').value = savedUsername;
@@ -4543,7 +4440,7 @@ function saveProfile() {
   }
 
   closeModal('profileModal');
-  
+  showToast('✅ פרופיל עודכן בהצלחה', 'success');
   auditLog('profile_update', `${currentUser.username} עדכן פרטי פרופיל`);
 }
 
@@ -4565,20 +4462,20 @@ function renderPendingRegistrations() {
   if (!listEl) return;
 
   if (!pending.length) {
-    listEl.innerHTML = '<div class="dz-1109">אין הרשמות ממתינות ✅</div>';
+    listEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">אין הרשמות ממתינות ✅</div>';
     return;
   }
 
   listEl.innerHTML = pending.map(u => `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--warning-light);border-radius:10px;margin-bottom:8px;flex-wrap:wrap;">
-      <div class="dz-238">
-        <div class="dz-1004">${u.fullName}</div>
-        <div class="dz-1010">${u.username} · ${u.dept} · ${u.email||'אין מייל'}</div>
-        <div class="dz-12">${u.registeredAt ? new Date(u.registeredAt).toLocaleString('he-IL') : ''}</div>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:14px;">${u.fullName}</div>
+        <div style="font-size:12px;color:var(--text-secondary);">${u.username} · ${u.dept} · ${u.email||'אין מייל'}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${u.registeredAt ? new Date(u.registeredAt).toLocaleString('he-IL') : ''}</div>
       </div>
-      <div class="dz-flex-1111">
-        <button onclick="approveRegistration('${u.username}')" class="btn btn-success" class="dz-card-1112">✅ אשר</button>
-        <button onclick="rejectRegistration('${u.username}')" class="btn btn-outline" class="dz-card-1113">❌ דחה</button>
+      <div style="display:flex;gap:6px;">
+        <button onclick="approveRegistration('${u.username}')" class="btn btn-success" style="padding:7px 14px;font-size:13px;border-radius:8px;">✅ אשר</button>
+        <button onclick="rejectRegistration('${u.username}')" class="btn btn-outline" style="padding:7px 14px;font-size:13px;border-radius:8px;color:var(--danger);border-color:var(--danger);">❌ דחה</button>
       </div>
     </div>
   `).join('');
@@ -4589,7 +4486,7 @@ function approveRegistration(username) {
   if (!db.users[username]) return;
   db.users[username].status = 'active';
   saveDB(db);
-  
+  showToast(`✅ ${db.users[username].fullName} אושר/ה`, 'success');
   auditLog('approve_user', `אושרה הרשמה של ${username}`);
   renderPendingRegistrations();
 }
@@ -4600,7 +4497,7 @@ function rejectRegistration(username) {
   if (!confirm(`למחוק את הרשמת ${name}?`)) return;
   delete db.users[username];
   saveDB(db);
-  
+  showToast(`🗑️ הרשמת ${name} נמחקה`, 'info');
   auditLog('reject_user', `נדחתה הרשמה של ${username}`);
   renderPendingRegistrations();
 }
@@ -4696,40 +4593,40 @@ function renderAIStaffingForecast() {
   const DEPT_COLORS = ['#1a56e8','#16a34a','#7c3aed','#0891b2','#dc2626','#d97706'];
 
   el.innerHTML = `
-    <div class="dz-flex-258">
-      <div class="section-title" class="dz-mg-168"><span class="section-title-icon">🤖</span> AI — חיזוי מחסור כוח אדם</div>
-      <span class="dz-card-1114">8 שבועות קדימה</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div class="section-title" style="margin-bottom:0;"><span class="section-title-icon">🤖</span> AI — חיזוי מחסור כוח אדם</div>
+      <span style="font-size:11px;background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:12px;font-weight:700;">8 שבועות קדימה</span>
     </div>
 
     ${alerts.length ? `
-    <div class="dz-mg-139">
-      <div class="dz-21">⚠️ התראות מחסור</div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">⚠️ התראות מחסור</div>
       ${alerts.map(a => `
         <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${a.pct>=70?'var(--danger-light)':'var(--warning-light)'};border-radius:10px;margin-bottom:6px;">
-          <div class="dz-fs-1116">${a.pct >= 70 ? '🔴' : '🟡'}</div>
-          <div class="dz-238">
-            <div class="dz-1117">${a.dept} — שבוע ${a.label}</div>
-            <div class="dz-1010">${a.absent} מתוך ${a.total} עובדים בחופשה (${a.pct}%)</div>
+          <div style="font-size:20px;">${a.pct >= 70 ? '🔴' : '🟡'}</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:13px;">${a.dept} — שבוע ${a.label}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${a.absent} מתוך ${a.total} עובדים בחופשה (${a.pct}%)</div>
           </div>
         </div>
       `).join('')}
-    </div>` : `<div class="dz-card-1118">✅ לא זוהו מחסורים צפויים ב-8 השבועות הקרובים</div>`}
+    </div>` : `<div style="background:var(--success-light);border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;color:#14532d;">✅ לא זוהו מחסורים צפויים ב-8 השבועות הקרובים</div>`}
 
     ${depts.length ? `
     <div>
-      <div class="dz-21">מפת עומס 8 שבועות</div>
-      <div class="dz-1119">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">מפת עומס 8 שבועות</div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
         <table style="border-collapse:collapse;min-width:500px;width:100%;font-size:12px;">
           <thead>
             <tr>
-              <th class="dz-1120">מחלקה</th>
+              <th style="padding:6px 8px;text-align:right;white-space:nowrap;">מחלקה</th>
               ${heatData.map(w => `<th style="padding:6px 4px;text-align:center;white-space:nowrap;">${w.label}</th>`).join('')}
             </tr>
           </thead>
           <tbody>
             ${depts.map((dept, di) => `
               <tr>
-                <td class="dz-1121">${dept}</td>
+                <td style="padding:6px 8px;font-weight:600;white-space:nowrap;color:${DEPT_COLORS[di%DEPT_COLORS.length]};">${dept}</td>
                 ${heatData.map(w => {
                   const dc = w.deptCounts[dept] || { pct: 0 };
                   const bg = dc.pct >= 70 ? '#fca5a5' : dc.pct >= 40 ? '#fde68a' : dc.pct >= 10 ? '#bbf7d0' : 'var(--surface2)';
@@ -4740,7 +4637,7 @@ function renderAIStaffingForecast() {
           </tbody>
         </table>
       </div>
-      <div class="dz-flex-1122">
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text-muted);">
         <span>🟥 70%+</span><span>🟨 40-70%</span><span>🟩 10-40%</span><span>⬜ נקי</span>
       </div>
     </div>` : ''}
@@ -4770,37 +4667,37 @@ function renderEmployeeScores() {
   }).sort((a,b) => a.wellbeing - b.wellbeing); // worst first
 
   if (!scores.length) {
-    el.innerHTML = '<div class="dz-225">אין עובדים להצגה</div>';
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">אין עובדים להצגה</div>';
     return;
   }
 
   el.innerHTML = `
-    <div class="dz-flex-258">
-      <div class="section-title" class="dz-mg-168"><span class="section-title-icon">🏆</span> AI — ציוני רווחת עובדים</div>
-      <span class="dz-card-1124">מסודר לפי סיכון</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div class="section-title" style="margin-bottom:0;"><span class="section-title-icon">🏆</span> AI — ציוני רווחת עובדים</div>
+      <span style="font-size:11px;background:var(--primary-light);color:var(--primary);padding:4px 10px;border-radius:12px;font-weight:700;">מסודר לפי סיכון</span>
     </div>
-    <div class="dz-flex-col-145">
+    <div style="display:flex;flex-direction:column;gap:8px;">
     ${scores.map(({ u, wellbeing, burnout, usagePct, daysSince, balance }) => {
       const color = wellbeing < 30 ? '#dc2626' : wellbeing < 60 ? '#f59e0b' : '#16a34a';
       const icon  = wellbeing < 30 ? '🔴' : wellbeing < 60 ? '🟡' : '🟢';
       return `
-        <div class="dz-flex-1125">
-          <div class="dz-fs-1116">${icon}</div>
-          <div class="dz-1126">
-            <div class="dz-1117">${u.fullName}</div>
-            <div class="dz-12">${Array.isArray(u.dept)?u.dept[0]:u.dept||''} · ${daysSince} ימים ללא חופשה</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:10px;flex-wrap:wrap;">
+          <div style="font-size:20px;">${icon}</div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-weight:700;font-size:13px;">${u.fullName}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${Array.isArray(u.dept)?u.dept[0]:u.dept||''} · ${daysSince} ימים ללא חופשה</div>
           </div>
-          <div class="dz-1128">
-            <div class="dz-1127">${wellbeing}</div>
-            <div class="dz-1129">ציון</div>
+          <div style="text-align:center;min-width:48px;">
+            <div style="font-size:18px;font-weight:800;color:${color};">${wellbeing}</div>
+            <div style="font-size:10px;color:var(--text-muted);">ציון</div>
           </div>
-          <div class="dz-1128">
+          <div style="text-align:center;min-width:48px;">
             <div style="font-size:15px;font-weight:700;">${usagePct}%</div>
-            <div class="dz-1129">ניצול</div>
+            <div style="font-size:10px;color:var(--text-muted);">ניצול</div>
           </div>
-          <div class="dz-1128">
-            <div class="dz-1130">${balance.toFixed(1)}</div>
-            <div class="dz-1129">יתרה</div>
+          <div style="text-align:center;min-width:48px;">
+            <div style="font-size:15px;font-weight:700;color:${balance<0?'var(--danger)':'var(--text)'};">${balance.toFixed(1)}</div>
+            <div style="font-size:10px;color:var(--text-muted);">יתרה</div>
           </div>
         </div>`;
     }).join('')}
@@ -4811,57 +4708,57 @@ function renderEmployeeScores() {
 
 // ============================================================
 
-// ============================================================
-// 🤖 MODULE SELECTOR AI CHAT
-// ============================================================
 function showModuleSelector() {
   ['loginScreen','appScreen','timeClockScreen','ceoDashboardScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
   });
 
-  if (isCeoUser()) { showCeoDashboard(); return; }
+  // CEO user gets special dashboard
+  if (isCeoUser()) {
+    showCeoDashboard();
+    return;
+  }
 
   const s = getSettings();
   const logoImg  = document.getElementById('moduleLogoImg');
   const logoIcon = document.getElementById('moduleBrandIcon');
   if (s.companyLogo) {
-    if (logoImg) { logoImg.src = s.companyLogo; logoImg.style.display = 'block'; }
-    if (logoIcon) logoIcon.style.display = 'none';
+    logoImg.src = s.companyLogo; logoImg.style.display = 'block';
+    logoIcon.style.display = 'none';
   } else {
-    if (logoImg) logoImg.style.display = 'none';
-    if (logoIcon) logoIcon.style.display = '';
+    logoImg.style.display = 'none'; logoIcon.style.display = '';
   }
   const cnEl = document.getElementById('moduleCompanyName');
-  if (cnEl && s.companyName && s.companyName !== 'החברה שלי') cnEl.textContent = s.companyName;
+  if (cnEl && s.companyName) cnEl.textContent = s.companyName;
   const wEl = document.getElementById('moduleWelcome');
-  if (wEl) wEl.innerHTML = '👋 שלום, ' + currentUser.fullName;
+  if (wEl) wEl.innerHTML = `👋 שלום, ${currentUser.fullName}`;
   document.getElementById('moduleSelectorScreen').classList.add('active');
   loadTheme();
   updateSickCount();
-  if (typeof initModuleAiChat === 'function') initModuleAiChat();
 
-  try {
-    const db = getDB();
-    const users = Object.values(db.users || {}).filter(u => u.role !== 'admin' && u.status === 'active');
-    const today = new Date().toISOString().split('T')[0];
-    const sick  = Object.values(db.sick || {}).filter(s => s.date === today).length;
-    const vacs  = db.vacations || {};
-    const onVac = users.filter(u => { const t=(vacs[u.username]||{})[today]; return t==='full'||t==='half'; }).length;
-    const onWfh = users.filter(u => (vacs[u.username]||{})[today]==='wfh').length;
-    const statsEl = document.getElementById('msStatsRow');
-    if (statsEl) {
-      statsEl.innerHTML =
-        '<div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">'+sick+'</div><div class="stat-lbl">חולה</div></div>' +
-        '<div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">'+onVac+'</div><div class="stat-lbl">חופשה</div></div>' +
-        '<div class="ms-stat-pill"><div class="stat-ico">🏠</div><div class="stat-num">'+onWfh+'</div><div class="stat-lbl">WFH</div></div>' +
-        '<div class="ms-stat-pill"><div class="stat-ico">👥</div><div class="stat-num">'+users.length+'</div><div class="stat-lbl">עובדים</div></div>';
-    }
-  } catch(e) {}
-
-  renderModuleAiMessages();
-
+  // Populate stats row
+  (function() {
+    try {
+      const db = getDB();
+      const users = Object.values(db.users || {}).filter(u => u.role !== 'admin' && u.status === 'active');
+      const today = new Date().toISOString().split('T')[0];
+      const sick = Object.values(db.sick || {}).filter(s => s.date === today).length;
+      const vacs = db.vacations || {};
+      const onVac = users.filter(u => vacs[u.username] && vacs[u.username][today]).length;
+      const statsEl = document.getElementById('msStatsRow');
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">${sick}</div><div class="stat-lbl">חולה</div></div>
+          <div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">${onVac}</div><div class="stat-lbl">בחופשה</div></div>
+          <div class="ms-stat-pill"><div class="stat-ico">👥</div><div class="stat-num">${users.length}</div><div class="stat-lbl">עובדים</div></div>
+        `;
+      }
+    } catch(e) {}
+  })();
+  // Show send announcement button for authorized users
   const sendBtn = document.getElementById('moduleSendAnnBtn');
   if (sendBtn) sendBtn.style.display = canSendAnnouncement() ? '' : 'none';
+  // Show announcement popup if any unseen
   setTimeout(renderAnnouncements, 700);
   setTimeout(checkBirthdays, 600);
   setTimeout(checkHandoverNeeded, 1500);
@@ -4911,7 +4808,7 @@ function loadTCRecord() {
   calcTCHours();
   const status = document.getElementById('tcSaveStatus');
   if (rec) {
-    status.innerHTML = `<span class="dz-clr-162">✅ דיווח קיים — ניתן לעדכן</span>`;
+    status.innerHTML = `<span style="color:var(--success);">✅ דיווח קיים — ניתן לעדכן</span>`;
   } else {
     status.innerHTML = '';
   }
@@ -4932,7 +4829,7 @@ function calcTCHours() {
     total.textContent = `${h}:${String(m).padStart(2,'0')}`;
     disp.style.display = '';
     // Color by hours
-    total.classList.toggle('dz-time-short', mins < 240); el.classList.toggle('dz-time-long', mins > 600 && mins >= 240); el.classList.toggle('dz-time-ok', mins >= 240 && mins <= 600);
+    total.style.color = mins < 240 ? 'var(--danger)' : mins > 600 ? 'var(--warning)' : 'var(--primary)';
   } else {
     disp.style.display = 'none';
   }
@@ -4945,9 +4842,9 @@ function saveTCRecord() {
   const note  = document.getElementById('tcNote').value.trim();
   const status = document.getElementById('tcSaveStatus');
 
-  if (!date)  { status.innerHTML = '<span class="dz-clr-1131">⚠️ בחר תאריך</span>'; return; }
-  if (!entry) { status.innerHTML = '<span class="dz-clr-1131">⚠️ הזן שעת כניסה</span>'; return; }
-  if (!exit)  { status.innerHTML = '<span class="dz-clr-1131">⚠️ הזן שעת יציאה</span>'; return; }
+  if (!date)  { status.innerHTML = '<span style="color:var(--danger);">⚠️ בחר תאריך</span>'; return; }
+  if (!entry) { status.innerHTML = '<span style="color:var(--danger);">⚠️ הזן שעת כניסה</span>'; return; }
+  if (!exit)  { status.innerHTML = '<span style="color:var(--danger);">⚠️ הזן שעת יציאה</span>'; return; }
 
   // Calc total
   const [eh,em] = entry.split(':').map(Number);
@@ -4970,7 +4867,7 @@ function saveTCRecord() {
   };
   saveDB(db);
   auditLog('timeclock_save', `${currentUser.fullName} דיווח שעות ${date}: ${entry}–${exit} (${totalStr})`);
-  status.innerHTML = `<span class="dz-clr-162">✅ נשמר בהצלחה — ${totalStr} שעות</span>`;
+  status.innerHTML = `<span style="color:var(--success);">✅ נשמר בהצלחה — ${totalStr} שעות</span>`;
   renderTCHistory();
 }
 
@@ -4992,15 +4889,15 @@ function renderTCHistory() {
   el.innerHTML = sorted.map(([date, rec]) => {
     const d = new Date(date + 'T00:00:00');
     const isToday = date === new Date().toISOString().slice(0,10);
-    return `<div class="dz-flex-1132" onclick="document.getElementById('tcDate').value='${date}';loadTCRecord();">
-      <div class="dz-1133">
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isToday?'var(--primary-light)':'var(--surface2)'};border-radius:10px;cursor:pointer;" onclick="document.getElementById('tcDate').value='${date}';loadTCRecord();">
+      <div style="text-align:center;min-width:36px;">
         <div style="font-size:17px;font-weight:800;color:${isToday?'var(--primary)':'var(--text)'};">${d.getDate()}</div>
-        <div class="dz-1129">${MONTHS[d.getMonth()]}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${MONTHS[d.getMonth()]}</div>
       </div>
-      <div class="dz-238">
-        <div class="dz-97">${DAYS[d.getDay()]}${isToday?' · היום':''}</div>
-        <div class="dz-253">${rec.entry} – ${rec.exit}</div>
-        ${rec.note ? `<div class="dz-12">${rec.note}</div>` : ''}
+      <div style="flex:1;">
+        <div style="font-size:12px;color:var(--text-muted);">${DAYS[d.getDay()]}${isToday?' · היום':''}</div>
+        <div style="font-size:13px;font-weight:700;">${rec.entry} – ${rec.exit}</div>
+        ${rec.note ? `<div style="font-size:11px;color:var(--text-muted);">${rec.note}</div>` : ''}
       </div>
       <div style="font-size:16px;font-weight:800;color:var(--primary);">${rec.total}</div>
     </div>`;
@@ -5061,7 +4958,7 @@ function exportTimeClock(range) {
   a.download = `דיווח_שעות_${from}_עד_${to}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  
+  showToast(`✅ יוצאו ${rows.length} דיווחים`, 'success');
   auditLog('timeclock_export', `ייצוא דיווחי שעות ${from} עד ${to} — ${rows.length} רשומות`);
 }
 
@@ -5076,23 +4973,23 @@ function renderTCTodayPreview() {
     if (dates[today]) rows.push({ username, ...dates[today] });
   });
   if (!rows.length) {
-    el.innerHTML = '<div class="dz-225">אין דיווחים להיום עדיין</div>';
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">אין דיווחים להיום עדיין</div>';
     return;
   }
   rows.sort((a,b) => a.fullName?.localeCompare(b.fullName));
   el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-    <thead><tr class="dz-1054">
-      <th class="dz-1067">עובד</th>
-      <th class="dz-1067">מחלקה</th>
-      <th class="dz-1066">כניסה</th>
-      <th class="dz-1066">יציאה</th>
-      <th class="dz-1066">סה"כ</th>
+    <thead><tr style="background:var(--surface2);">
+      <th style="padding:8px;text-align:right;">עובד</th>
+      <th style="padding:8px;text-align:right;">מחלקה</th>
+      <th style="padding:8px;text-align:center;">כניסה</th>
+      <th style="padding:8px;text-align:center;">יציאה</th>
+      <th style="padding:8px;text-align:center;">סה"כ</th>
     </tr></thead>
-    <tbody>${rows.map(r => `<tr class="dz-1134">
+    <tbody>${rows.map(r => `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:8px;font-weight:600;">${r.fullName||r.username}</td>
-      <td class="dz-1135">${r.dept||''}</td>
-      <td class="dz-1066">${r.entry||'—'}</td>
-      <td class="dz-1066">${r.exit||'—'}</td>
+      <td style="padding:8px;color:var(--text-secondary);">${r.dept||''}</td>
+      <td style="padding:8px;text-align:center;">${r.entry||'—'}</td>
+      <td style="padding:8px;text-align:center;">${r.exit||'—'}</td>
       <td style="padding:8px;text-align:center;font-weight:700;color:var(--primary);">${r.total||'—'}</td>
     </tr>`).join('')}</tbody>
   </table>`;
@@ -5139,58 +5036,58 @@ function renderVacationDNA() {
   const maxBar = Math.max(...monthDays, 1);
 
   el.innerHTML = `
-    <div class="dz-flex-1136">
-      <div class="section-title" class="dz-mg-168"><span class="section-title-icon">🧬</span> Vacation DNA — טביעת האצבע שלך</div>
-      <span class="dz-card-1124">AI Personal</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div class="section-title" style="margin-bottom:0;"><span class="section-title-icon">🧬</span> Vacation DNA — טביעת האצבע שלך</div>
+      <span style="font-size:11px;background:var(--primary-light);color:var(--primary);padding:4px 10px;border-radius:12px;font-weight:700;">AI Personal</span>
     </div>
 
     <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:14px;">
-      <div class="dz-flex-1137">
-        <span class="dz-1117">🔋 מד שחיקה אישי</span>
-        <span class="dz-1138">${burnoutScore}/100</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:700;font-size:13px;">🔋 מד שחיקה אישי</span>
+        <span style="font-size:14px;font-weight:800;color:${burnoutColor};">${burnoutScore}/100</span>
       </div>
       <div style="background:#e2e8f0;border-radius:6px;height:12px;overflow:hidden;">
-        <div class="dz-1139"></div>
+        <div style="height:100%;width:${burnoutScore}%;background:${burnoutColor};border-radius:6px;"></div>
       </div>
       <div style="font-size:12px;color:${burnoutColor};margin-top:6px;font-weight:600;">${burnoutLabel}</div>
-      ${daysSinceVac > 0 ? `<div class="dz-1140">ימים מאז חופשה אחרונה: <strong>${daysSinceVac}</strong></div>` : ''}
+      ${daysSinceVac > 0 ? `<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">ימים מאז חופשה אחרונה: <strong>${daysSinceVac}</strong></div>` : ''}
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
-      <div class="dz-card-1141">
-        <div class="dz-1008">${totalVacDays}</div>
-        <div class="dz-12">ימי חופשה</div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:var(--primary);">${totalVacDays}</div>
+        <div style="font-size:11px;color:var(--text-muted);">ימי חופשה</div>
       </div>
-      <div class="dz-card-1141">
-        <div class="dz-1011">${totalWFH}</div>
-        <div class="dz-12">ימי WFH</div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:#ca8a04;">${totalWFH}</div>
+        <div style="font-size:11px;color:var(--text-muted);">ימי WFH</div>
       </div>
-      <div class="dz-card-1141">
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:24px;font-weight:800;color:var(--success);">${avgPerMonth}</div>
-        <div class="dz-12">ממוצע/חודש</div>
+        <div style="font-size:11px;color:var(--text-muted);">ממוצע/חודש</div>
       </div>
     </div>
 
-    <div class="dz-mg-139">
-      <div class="dz-1142">דפוס חופשות לפי חודש</div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">דפוס חופשות לפי חודש</div>
       <div style="display:flex;gap:3px;align-items:flex-end;height:64px;">
         ${monthDays.map((v, i) => {
           const h = Math.max(3, Math.round(v / maxBar * 52));
           const isNow  = i === currentMonth;
           const isPeak = i === peakMonthIdx && v > 0;
-          return `<div class="dz-flex-col-1143" title="${MONTHS[i]}: ${v} ימים">
-            <div class="dz-1144"></div>
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:64px;" title="${MONTHS[i]}: ${v} ימים">
+            <div style="width:100%;height:${h}px;background:${isPeak?'var(--warning)':isNow?'var(--primary)':'var(--primary-light)'};border-radius:3px 3px 0 0;"></div>
             <div style="font-size:7px;color:var(--text-muted);margin-top:2px;">${MONTHS[i].slice(0,2)}</div>
           </div>`;
         }).join('')}
       </div>
     </div>
 
-    ${pattern ? `<div class="dz-card-1145">
+    ${pattern ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;">
       <span style="font-weight:700;color:#15803d;">🔍 דפוס שזוהה: </span>${pattern}
     </div>` : ''}
 
-    ${recommendation ? `<div class="dz-card-1146">
+    ${recommendation ? `<div style="background:var(--primary-light);border:1px solid var(--primary);border-radius:10px;padding:12px;font-size:13px;">
       <span style="font-weight:700;color:var(--primary-dark);">💡 המלצה: </span>${recommendation}
     </div>` : ''}
   `;
@@ -5296,14 +5193,14 @@ async function forgotStep1Next() {
   const errEl    = document.getElementById('forgotStep1Error');
   errEl.style.display = 'none';
 
-  if (!username) { errEl.textContent = 'נא להזין שם משתמש'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+  if (!username) { errEl.textContent = 'נא להזין שם משתמש'; errEl.style.display = 'block'; return; }
 
   const db   = getDB();
   const user = db.users[username];
-  if (!user) { errEl.textContent = 'שם משתמש לא נמצא במערכת'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+  if (!user) { errEl.textContent = 'שם משתמש לא נמצא במערכת'; errEl.style.display = 'block'; return; }
   if (!user.email) {
     errEl.innerHTML = '⚠️ אין מייל רשום לחשבון זה.<br><strong>פנה למנהל המערכת לאיפוס ידני.</strong>';
-    errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.style.display = 'block'; return;
   }
 
   // Show sending state
@@ -5320,7 +5217,7 @@ async function forgotStep1Next() {
     document.getElementById('forgotNewPass').value  = '';
     document.getElementById('forgotNewPass2').value = '';
     document.getElementById('forgotStep1Body').style.display = 'none';
-    (function(){const _e=document.getElementById('forgotStep2Body');if(_e){_e.classList.remove('dz-20'); _e.style.display='';}})()
+    document.getElementById('forgotStep2Body').style.display = '';
     auditLog('password_reset_sent', `${username} ביקש איפוס סיסמה`);
   } else {
     const msgs = {
@@ -5330,7 +5227,7 @@ async function forgotStep1Next() {
       'auth/operation-not-allowed': '⚠️ שחזור מייל לא מופעל — פנה למנהל'
     };
     errEl.textContent = msgs[result.error] || `⚠️ שגיאה: ${result.error}`;
-    errEl.classList.remove('dz-20'); errEl.style.display = 'block';
+    errEl.style.display = 'block';
   }
 }
 
@@ -5340,11 +5237,11 @@ function forgotSetNewPassword() {
   const p2 = document.getElementById('forgotNewPass2').value;
   errEl.style.display = 'none';
 
-  if (!p1 || p1.length < 4) { errEl.textContent = 'סיסמה חייבת להיות לפחות 4 תווים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
-  if (p1 !== p2) { errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+  if (!p1 || p1.length < 4) { errEl.textContent = 'סיסמה חייבת להיות לפחות 4 תווים'; errEl.style.display = 'block'; return; }
+  if (p1 !== p2) { errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.style.display = 'block'; return; }
 
   const db = getDB();
-  if (!db.users[_forgotUser]) { errEl.textContent = 'שגיאה — נסה שוב'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return; }
+  if (!db.users[_forgotUser]) { errEl.textContent = 'שגיאה — נסה שוב'; errEl.style.display = 'block'; return; }
   db.users[_forgotUser].password = hashPass(p1);
   saveDB(db);
   closeModal('forgotStep1Modal');
@@ -5372,19 +5269,19 @@ function doChangePassword() {
   const db = getDB();
   const user = db.users[currentUser.username];
   if (user.password !== hashPass(current)) {
-    errEl.textContent = 'הסיסמה הנוכחית שגויה'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'הסיסמה הנוכחית שגויה'; errEl.style.display = 'block'; return;
   }
   if (newPass.length < 4) {
-    errEl.textContent = 'הסיסמה החדשה חייבת להיות לפחות 4 תווים'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'הסיסמה החדשה חייבת להיות לפחות 4 תווים'; errEl.style.display = 'block'; return;
   }
   if (newPass !== newPass2) {
-    errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.classList.remove('dz-20'); errEl.style.display = 'block'; return;
+    errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.style.display = 'block'; return;
   }
   user.password = hashPass(newPass);
   saveDB(db);
   closeModal('changePasswordModal');
   auditLog('password_change', `${currentUser.username} שינה סיסמה`);
-  
+  showToast('✅ הסיסמה עודכנה בהצלחה', 'success');
 }
 
 
@@ -5559,7 +5456,7 @@ function openFirebaseModal() {
     document.getElementById('fbDisconnectBtn').style.display = '';
     document.getElementById('fbResetBtn').style.display = '';
   } else {
-    statusDiv.innerHTML = '<div class="alert" class="dz-1147"><span class="alert-icon">⚠️</span><span>לא מחובר — עובד במצב לא מקוון. הנתונים נשמרים מקומית בלבד.</span></div>';
+    statusDiv.innerHTML = '<div class="alert" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;"><span class="alert-icon">⚠️</span><span>לא מחובר — עובד במצב לא מקוון. הנתונים נשמרים מקומית בלבד.</span></div>';
     document.getElementById('fbDisconnectBtn').style.display = 'none';
     document.getElementById('fbResetBtn').style.display = 'none';
   }
@@ -5583,7 +5480,7 @@ function disconnectFirebase() {
   document.getElementById('fbResetBtn').style.display = 'none';
   document.getElementById('firebaseStatusDiv').innerHTML =
     '<div class="alert alert-info"><span class="alert-icon">🔌</span><span>נותק. הנתונים נשמרים מקומית בלבד.</span></div>';
-  
+  showToast('🔌 נותק מ-Firebase', 'warning');
 }
 
 async function resetFirebase() {
@@ -5592,7 +5489,7 @@ async function resetFirebase() {
   try {
     await firebaseDB.collection('vacationSystem').doc('data').delete();
     await pushToFirebase();
-    
+    showToast('✅ Firebase אופס ומסונכרן מחדש', 'success');
   } catch(err) {
     showToast('❌ שגיאה: ' + err.message, 'error');
   }
@@ -5648,7 +5545,7 @@ function openSubmitModal() {
   }
   
   const MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  let html = `<div class="dz-card-1148">
+  let html = `<div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:12px;">
     <div style="font-weight:700;margin-bottom:8px;">📅 ${MONTHS[month-1]} ${year} — ${currentUser.fullName}</div>`;
   
   let totalDays = 0;
@@ -5659,13 +5556,13 @@ function openSubmitModal() {
     const days = type === 'full' ? 1 : type === 'half' ? 0.5 : 0;
     totalDays += days;
     const payM = getPayrollMonth(dt, getSettings()).month;
-    html += `<div class="dz-flex-1149">
+    html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
       <span>${d.getDate()}/${d.getMonth()+1} (${dayNames[d.getDay()]})</span>
       <span>${typeLabel}</span>
-      <span class="dz-clr-1087">תלוש: ${MONTHS[payM-1]}</span>
+      <span style="color:var(--text-muted);">תלוש: ${MONTHS[payM-1]}</span>
     </div>`;
   });
-  html += `<div class="dz-1150">סה"כ: ${totalDays} ימים</div></div>`;
+  html += `<div style="font-weight:700;margin-top:8px;color:var(--primary);">סה"כ: ${totalDays} ימים</div></div>`;
 
   // Show who will receive this request
   const db = getDB();
@@ -5676,7 +5573,7 @@ function openSubmitModal() {
       👤 הבקשה תועבר למנהל/ת: <strong>${managerName}</strong>
     </div>`;
   } else {
-    html += `<div class="dz-card-1151">
+    html += `<div style="background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-bottom:4px;">
       ⚠️ לא הוגדר מנהל למחלקה שלך — הבקשה תועבר לאדמין
     </div>`;
   }
@@ -5778,12 +5675,12 @@ async function resetLocalData() {
         updatedBy:        'system_reset'
       };
       await firebaseDB.collection('vacationSystem').doc('data').set(payload);
-      
+      showToast('✅ כל הנתונים אופסו — מקומית ו-Firebase. מרענן...', 'success');
     } catch(e) {
       showToast('⚠️ אופס מקומית. שגיאת Firebase: ' + e.message, 'warning');
     }
   } else {
-    
+    showToast('✅ הנתונים אופסו. מרענן...', 'success');
   }
   setTimeout(() => location.reload(), 1500);
 }
@@ -5799,7 +5696,7 @@ function exportBackup() {
   a.download = `vacation_backup_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  
+  showToast('💾 גיבוי הורד בהצלחה', 'success');
 }
 
 // ============================================================
@@ -5819,8 +5716,8 @@ function openApprovalModal(reqId) {
 
   document.getElementById('approvalModalTitle').textContent = `📋 בקשת חופשה — ${req.fullName}`;
 
-  let html = `<div class="dz-card-1148">
-    <div class="dz-grid-1152">
+  let html = `<div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:12px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:14px;">
       <div><strong>עובד:</strong> ${req.fullName}</div>
       <div><strong>מחלקה:</strong> ${req.dept||''}</div>
       <div><strong>תקופה:</strong> ${req.dateRange || (MONTHS[(req.month||1)-1] + ' ' + req.year)}</div>
@@ -5831,30 +5728,30 @@ function openApprovalModal(reqId) {
 
   const vacsObj = req.vacations || Object.fromEntries((req.dates||[]).map(d=>[d,req.type||'full']));
   let total = 0;
-  html += `<table class="dz-1153">
-    <thead><tr class="dz-1054">
-      <th class="dz-1067">תאריך</th><th class="dz-1067">יום</th>
-      <th class="dz-1067">סוג</th><th class="dz-1067">תלוש</th>
+  html += `<table style="width:100%;font-size:13px;border-collapse:collapse;">
+    <thead><tr style="background:var(--surface2);">
+      <th style="padding:8px;text-align:right;">תאריך</th><th style="padding:8px;text-align:right;">יום</th>
+      <th style="padding:8px;text-align:right;">סוג</th><th style="padding:8px;text-align:right;">תלוש</th>
     </tr></thead><tbody>`;
   Object.entries(vacsObj).sort(([a],[b])=>a.localeCompare(b)).forEach(([dt,type])=>{
     const d = new Date(dt+'T00:00:00');
     const typeLabel = type==='full'?'יום מלא':type==='half'?'חצי יום':'WFH';
     total += type==='full'?1:type==='half'?0.5:0;
     const payM = getPayrollMonth(dt, getSettings()).month;
-    html += `<tr class="dz-1134">
-      <td class="dz-pd-1154">${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</td>
-      <td class="dz-pd-1154">${DAY_NAMES[d.getDay()]}</td>
-      <td class="dz-pd-1154">${typeLabel}</td>
-      <td class="dz-1155">${MONTHS[payM-1]}</td>
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</td>
+      <td style="padding:8px;">${DAY_NAMES[d.getDay()]}</td>
+      <td style="padding:8px;">${typeLabel}</td>
+      <td style="padding:8px;color:var(--text-muted);">${MONTHS[payM-1]}</td>
     </tr>`;
   });
   html += `</tbody><tfoot><tr style="font-weight:700;background:var(--primary-light);">
-    <td colspan="2" class="dz-pd-1154">סה"כ</td>
-    <td colspan="2" class="dz-1156">${total} ימים</td>
+    <td colspan="2" style="padding:8px;">סה"כ</td>
+    <td colspan="2" style="padding:8px;color:var(--primary);">${total} ימים</td>
   </tr></tfoot></table></div>
   <div class="modal-footer">
     <button class="btn btn-outline" onclick="closeModal('approvalModal')">סגור</button>
-    <button class="btn" class="dz-1147" onclick="rejectRequestPrompt('${req.id}');closeModal('approvalModal');">❌ דחה</button>
+    <button class="btn" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;" onclick="rejectRequestPrompt('${req.id}');closeModal('approvalModal');">❌ דחה</button>
     <button class="btn btn-success" onclick="approveRequest('${req.id}');closeModal('approvalModal');">✅ אשר</button>
   </div>`;
 
@@ -5891,7 +5788,7 @@ function renderSelectedEmployee() {
   const roleBadge = u.role === 'admin' ? 'badge-admin' : u.role === 'accountant' ? 'badge-accountant' : 'badge-user';
 
   document.getElementById('empEditName').textContent = u.fullName;
-  document.getElementById('empEditRole').innerHTML = `<span class="badge ${roleBadge}" class="dz-fs-1157">${roleLabel}</span>`;
+  document.getElementById('empEditRole').innerHTML = `<span class="badge ${roleBadge}" style="font-size:11px;">${roleLabel}</span>`;
   document.getElementById('empEditDept').textContent = u.dept || '';
   document.getElementById('empEditUsername').textContent = username;
   document.getElementById('empEditBirthday').value = u.birthday || '';
@@ -5968,22 +5865,22 @@ function renderPermForEmployee() {
   const hasAccess = grantableSections.some(s => perms[s.key]);
 
   container.innerHTML = `
-    <div class="dz-card-1158">
-      <div class="dz-flex-1136">
+    <div style="background:var(--surface);border:1.5px solid var(--primary);border-radius:14px;padding:18px 20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
         <div>
-          <span class="dz-1159">${u.fullName}</span>
+          <span style="font-size:16px;font-weight:900;">${u.fullName}</span>
           <span style="font-size:12px;color:var(--text-muted);margin-right:8px;">${u.role === 'manager' ? '👔 מנהל' : '👤 עובד'} · ${Array.isArray(u.dept)?u.dept[0]:u.dept||''}</span>
-          <span class="dz-card-1160">${hasAccess ? '✅ יש גישה' : '— אין גישה'}</span>
+          <span style="font-size:11px;padding:3px 10px;border-radius:10px;font-weight:700;background:${hasAccess ? 'var(--success-light)' : 'var(--surface2)'};color:${hasAccess ? 'var(--success)' : 'var(--text-muted)'};">${hasAccess ? '✅ יש גישה' : '— אין גישה'}</span>
         </div>
         <button onclick="document.getElementById('permEditRow').style.display='none';document.getElementById('permEditSelect').value='';"
-          class="dz-card-262">✕ סגור</button>
+          style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;font-family:'Heebo',sans-serif;font-size:13px;font-weight:700;">✕ סגור</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
         ${grantableSections.map(s => `
-          <label class="dz-flex-1162">
+          <label style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1.5px solid ${perms[s.key] ? 'var(--primary)' : 'var(--border)'};border-radius:10px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;transition:border-color 0.15s;">
             <input type="checkbox" id="perm_${username}_${s.key}" ${perms[s.key] ? 'checked' : ''}
               onchange="updatePermCheckbox('${username}','${s.key}',this.checked,this)"
-              class="dz-1163">
+              style="width:15px;height:15px;accent-color:var(--primary);">
             ${s.label}
           </label>
         `).join('')}
@@ -6002,7 +5899,7 @@ function updatePermCheckbox(username, key, checked, el) {
   // Update border color visually
   if (el) {
     const label = el.closest('label');
-    if (label) label.classList.toggle('dz-cb-checked', checked); el.classList.toggle('dz-cb-unchecked', !checked);
+    if (label) label.style.borderColor = checked ? 'var(--primary)' : 'var(--border)';
   }
 }
 
@@ -6018,7 +5915,7 @@ function savePermissionsForUser(username) {
   db.permissions[username] = perms;
   saveDB(db);
   pushToFirebase();
-  
+  showToast('✅ הרשאות נשמרו', 'success');
   // Refresh the row
   renderPermForEmployee();
 }
@@ -6026,75 +5923,230 @@ function savePermissionsForUser(username) {
 
 
 // ============================================================
-// DAZURA SPLASH SCREEN
+// DAZURA SPLASH SCREEN — 2030 FUTURISTIC
 // ============================================================
-// ── SPLASH SCREEN ──────────────────────────────────────────
-// Uses DOMContentLoaded (not window.load) so Firebase/network
-// delays never block it. Hard timeout = 2.5s no matter what.
-(function() {
-  var _splashDone = false;
-  function dismissSplash() {
-    if (_splashDone) return;
-    _splashDone = true;
-    var splash = document.getElementById('dazura-splash');
-    if (!splash) return;
-    splash// transition via CSS class
-    splash.classList.add('dz-fade-out');
-    setTimeout(function() {
-      if (splash.parentNode) splash.parentNode.removeChild(splash);
-    }, 520);
-  }
+window.addEventListener('load', function() {
+  const splash = document.getElementById('dazura-splash');
+  if (!splash) return;
 
-  function populateSplash() {
-    try {
-      var raw = localStorage.getItem('vacSystem_v3');
-      if (!raw) return;
-      var db = JSON.parse(raw);
-      var sysName = (db.settings && db.settings.systemName) ? db.settings.systemName.trim() : 'Dazura';
-      var titleEl = document.getElementById('dazuraTitle');
+  // Apply saved splash theme
+  try {
+    const raw = localStorage.getItem('vacSystem_v3');
+    if (raw) {
+      const db = JSON.parse(raw);
+
+      // Apply saved splash theme
+      const savedTheme = db.settings?.splashTheme || 1;
+      splash.className = `splash-theme-${savedTheme}`;
+
+      // System name
+      const sysName = db.settings?.systemName?.trim() || 'Dazura';
+      const titleEl = document.getElementById('dazuraTitle');
       if (titleEl) titleEl.textContent = sysName;
-      var company = (db.settings && db.settings.companyName && db.settings.companyName !== 'החברה שלי')
+
+      // Company name
+      const company = (db.settings?.companyName && db.settings.companyName !== 'החברה שלי')
         ? db.settings.companyName : '';
-      var compEl = document.getElementById('dazuraCompany');
+      const compEl = document.getElementById('dazuraCompany');
       if (compEl) compEl.textContent = company;
-      var now = new Date();
-      var todayKey = now.getFullYear() + '-' +
-        String(now.getMonth()+1).padStart(2,'0') + '-' +
-        String(now.getDate()).padStart(2,'0');
-      var vacation=0, wfh=0, sick=0;
-      Object.keys(db.users || {}).forEach(function(u) {
-        var t = ((db.vacations || {})[u] || {})[todayKey];
-        if (t==='full'||t==='half') vacation++;
-        else if (t==='wfh') wfh++;
-        else if (t==='sick') sick++;
-      });
-      var n0=document.getElementById('dazNum0'); if(n0) n0.textContent=vacation;
-      var n1=document.getElementById('dazNum1'); if(n1) n1.textContent=wfh;
-      var n2=document.getElementById('dazNum2'); if(n2) n2.textContent=sick;
-    } catch(e) {}
+
+      // Live stats — today
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const todayKey = `${yyyy}-${mm}-${dd}`;
+
+      let vacation = 0, wfh = 0, sick = 0;
+      for (const uname of Object.keys(db.users || {})) {
+        const type = (db.vacations?.[uname] || {})[todayKey];
+        if (type === 'full' || type === 'half') vacation++;
+        else if (type === 'wfh') wfh++;
+        else if (type === 'sick') sick++;
+      }
+      document.getElementById('dazNum0').textContent = vacation;
+      document.getElementById('dazNum1').textContent = wfh;
+      document.getElementById('dazNum2').textContent = sick;
+    }
+  } catch(e) {}
+
+  // Generate particles
+  const particles = document.getElementById('splashParticles');
+  if (particles) {
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('div');
+      p.className = 'splash-particle';
+      const size = Math.random() * 3 + 1;
+      p.style.cssText = `
+        left:${Math.random()*100}%;top:${Math.random()*100}%;
+        width:${size}px;height:${size}px;
+        --dur:${2+Math.random()*4}s;
+        --delay:-${Math.random()*4}s;
+        opacity:${0.2+Math.random()*0.8};
+      `;
+      particles.appendChild(p);
+    }
   }
 
-  // Run immediately if DOM ready, else wait for it
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      populateSplash();
-      setTimeout(dismissSplash, 2200);
-    });
-  } else {
-    populateSplash();
-    setTimeout(dismissSplash, 2200);
+  // Progress bar animation
+  const progressBar = document.getElementById('splashProgressBar');
+  const duration = (() => {
+    try {
+      const db = JSON.parse(localStorage.getItem('vacSystem_v3') || '{}');
+      return (db.settings?.splashTiming || 2) * 1000;
+    } catch(e) { return 2000; }
+  })();
+
+  if (progressBar) {
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(100, (elapsed / duration) * 100);
+      progressBar.style.width = pct + '%';
+      if (pct >= 100) clearInterval(interval);
+    }, 50);
   }
 
-  // Absolute hard kill — no matter what, splash is gone at 3.5s
-  setTimeout(dismissSplash, 3500);
-})();
+  setTimeout(function() {
+    splash.style.opacity = '0';
+    setTimeout(() => { if(splash.parentNode) splash.remove(); }, 700);
+  }, duration);
+});
 
 
-// ── Signal that script.js is fully loaded — flush queued _safeCall calls ──
-window._scriptReady = true;
-if (window._pendingCalls && window._pendingCalls.length) {
-  window._pendingCalls.forEach(function(c) {
-    if (typeof window[c.fn] === 'function') window[c.fn].apply(null, c.args);
-  });
-  window._pendingCalls = [];
+// ============================================================
+// AI PANEL FUNCTIONS
+// ============================================================
+let _aiPanelOpen = false;
+
+function toggleAIPanel() {
+  const panel = document.getElementById('aiPanel');
+  const btn   = document.getElementById('aiFloatBtn');
+  if (!panel) return;
+  _aiPanelOpen = !_aiPanelOpen;
+  panel.classList.toggle('open', _aiPanelOpen);
+  if (_aiPanelOpen) {
+    setTimeout(() => { document.getElementById('aiInput')?.focus(); }, 300);
+    scrollAIToBottom();
+  }
 }
+
+function sendAIMessage() {
+  const input = document.getElementById('aiInput');
+  const msg = input?.value.trim();
+  if (!msg) return;
+  if (!currentUser) { showToast('⚠️ יש להתחבר כדי להשתמש ב-AI', 'warning'); return; }
+
+  input.value = '';
+  appendAIMessage(msg, 'user');
+  showAITyping();
+
+  setTimeout(() => {
+    hideAITyping();
+    const db = getDB();
+    let response;
+    try {
+      response = DazuraAI.respond(msg, currentUser, db);
+    } catch(e) {
+      response = 'אירעה שגיאה בעיבוד השאלה. נסה שוב.';
+    }
+    appendAIMessage(response, 'ai');
+    scrollAIToBottom();
+  }, 400 + Math.random() * 400);
+}
+
+function appendAIMessage(text, role) {
+  const messages = document.getElementById('aiMessages');
+  if (!messages) return;
+
+  // Remove welcome if present
+  const welcome = messages.querySelector('.ai-welcome');
+  if (welcome) welcome.remove();
+
+  const div = document.createElement('div');
+  div.className = `ai-msg ${role}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'ai-msg-bubble';
+
+  // Bold markdown **text**
+  bubble.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  div.appendChild(bubble);
+  messages.appendChild(div);
+  scrollAIToBottom();
+}
+
+let _typingEl = null;
+function showAITyping() {
+  const messages = document.getElementById('aiMessages');
+  if (!messages) return;
+  _typingEl = document.createElement('div');
+  _typingEl.className = 'ai-msg ai';
+  _typingEl.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
+  messages.appendChild(_typingEl);
+  scrollAIToBottom();
+}
+function hideAITyping() {
+  if (_typingEl) { _typingEl.remove(); _typingEl = null; }
+}
+
+function scrollAIToBottom() {
+  const messages = document.getElementById('aiMessages');
+  if (messages) messages.scrollTop = messages.scrollHeight;
+}
+
+function clearAIChat() {
+  const messages = document.getElementById('aiMessages');
+  if (messages) {
+    messages.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שיחה חדשה. שאל אותי כל שאלה!</p></div>';
+  }
+  if (typeof DazuraAI !== 'undefined') DazuraAI.clearHistory();
+}
+
+// Show AI button after login
+function showAIButton() {
+  const btn = document.getElementById('aiFloatBtn');
+  if (btn) btn.style.display = '';
+}
+function hideAIButton() {
+  const btn = document.getElementById('aiFloatBtn');
+  if (btn) btn.style.display = 'none';
+  const panel = document.getElementById('aiPanel');
+  if (panel) panel.classList.remove('open');
+  _aiPanelOpen = false;
+}
+
+// ============================================================
+// SPLASH SETTINGS (ADMIN)
+// ============================================================
+let _selectedSplash = 1;
+function selectSplash(n) {
+  _selectedSplash = n;
+  document.querySelectorAll('.splash-option').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.splash) === n);
+  });
+}
+function openSplashSelector() {
+  const db = getDB();
+  const saved = db.settings?.splashTheme || 1;
+  _selectedSplash = saved;
+  const timing = db.settings?.splashTiming || 2;
+  const inp = document.getElementById('splashTimingInput');
+  const val = document.getElementById('splashTimingVal');
+  if (inp) inp.value = timing;
+  if (val) val.textContent = timing;
+  document.querySelectorAll('.splash-option').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.splash) === saved);
+  });
+  openModal('splashSelectorModal');
+}
+function saveSplashSettings() {
+  const timing = parseInt(document.getElementById('splashTimingInput')?.value || 2);
+  const db = getDB();
+  db.settings.splashTheme = _selectedSplash;
+  db.settings.splashTiming = timing;
+  saveDB(db);
+  closeModal('splashSelectorModal');
+  showToast('✅ הגדרות Splash נשמרו', 'success');
+}
+
