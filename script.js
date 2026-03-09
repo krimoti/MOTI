@@ -505,11 +505,22 @@ function doLogin() {
   }
 
   document.getElementById('loginScreen').classList.remove('active');
+  // ── Reset AI chat completely on new login ──
+  if (typeof DazuraAI !== 'undefined') DazuraAI.clearHistory();
+  const aiMsgs = document.getElementById('aiMessages');
+  if (aiMsgs) aiMsgs.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI. שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
+  const aiPanel = document.getElementById('aiPanel');
+  if (aiPanel) aiPanel.classList.remove('open');
+  _aiPanelOpen = false;
   showAIButton();
   showModuleSelector();
 }
 
 function doLogout() {
+  // ── Full AI reset on logout ──
+  if (typeof DazuraAI !== 'undefined') DazuraAI.clearHistory();
+  const aiMsgs = document.getElementById('aiMessages');
+  if (aiMsgs) aiMsgs.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI. שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
   currentUser = null;
   hideAIButton();
   ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen'].forEach(id => {
@@ -4747,21 +4758,35 @@ function showModuleSelector() {
       const onVac = users.filter(u => vacs[u.username] && vacs[u.username][today]).length;
       const statsEl = document.getElementById('msStatsRow');
       if (statsEl) {
-        statsEl.innerHTML = `
-          <div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">${sick}</div><div class="stat-lbl">חולה</div></div>
-          <div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">${onVac}</div><div class="stat-lbl">בחופשה</div></div>
-          <div class="ms-stat-pill"><div class="stat-ico">👥</div><div class="stat-num">${users.length}</div><div class="stat-lbl">עובדים</div></div>
-        `;
+        const canAnn = canSendAnnouncement();
+        statsEl.innerHTML =
+          '<div class="ms-stat-pill"><div class="stat-ico">👥</div><div class="stat-num">' + users.length + '</div><div class="stat-lbl">עובדים</div></div>' +
+          '<div class="ms-stat-pill"><div class="stat-ico">🏖️</div><div class="stat-num">' + onVac + '</div><div class="stat-lbl">בחופשה</div></div>' +
+          '<div class="ms-stat-pill"><div class="stat-ico">🤒</div><div class="stat-num">' + sick + '</div><div class="stat-lbl">חולה</div></div>' +
+          (canAnn ? '<div class="ms-stat-pill ms-stat-ann" onclick="openCeoMessage()" title="שלח הודעה"><div class="stat-ico">📢</div><div class="stat-num" style="font-size:12px;font-weight:700;color:#fff;line-height:1.2;margin-top:2px;">שלח<br>הודעה</div></div>' : '');
       }
     } catch(e) {}
   })();
-  // Show send announcement button for authorized users
-  const sendBtn = document.getElementById('moduleSendAnnBtn');
-  if (sendBtn) sendBtn.style.display = canSendAnnouncement() ? '' : 'none';
   // Show announcement popup if any unseen
   setTimeout(renderAnnouncements, 700);
   setTimeout(checkBirthdays, 600);
   setTimeout(checkHandoverNeeded, 1500);
+}
+
+// Open AI panel from module selector
+function openAIFromSelector() {
+  _aiPanelOpen = false; // reset state
+  const panel = document.getElementById('aiPanel');
+  if (panel) {
+    panel.classList.add('open');
+    _aiPanelOpen = true;
+    // Reset chat to welcome state
+    const messages = document.getElementById('aiMessages');
+    if (messages) {
+      messages.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI.<br>שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
+    }
+    setTimeout(() => { document.getElementById('aiInput')?.focus(); }, 300);
+  }
 }
 
 function enterModule(module) {
@@ -6038,6 +6063,11 @@ function sendAIMessage() {
   if (!currentUser) { showToast('⚠️ יש להתחבר כדי להשתמש ב-AI', 'warning'); return; }
 
   input.value = '';
+
+  // Refresh mode: clear previous Q+A, show only current exchange
+  const messages = document.getElementById('aiMessages');
+  if (messages) messages.innerHTML = '';
+
   appendAIMessage(msg, 'user');
   showAITyping();
 
@@ -6046,30 +6076,32 @@ function sendAIMessage() {
     const db = getDB();
     let response;
     try {
-      response = DazuraAI.respond(msg, currentUser, db);
+      // Use fresh user object from DB to ensure correct permissions
+      const freshUser = (db.users && db.users[currentUser.username]) ? db.users[currentUser.username] : currentUser;
+      response = DazuraAI.respond(msg, freshUser, db);
     } catch(e) {
       response = 'אירעה שגיאה בעיבוד השאלה. נסה שוב.';
     }
     appendAIMessage(response, 'ai');
     scrollAIToBottom();
-  }, 400 + Math.random() * 400);
+  }, 350 + Math.random() * 300);
 }
 
 function appendAIMessage(text, role) {
   const messages = document.getElementById('aiMessages');
   if (!messages) return;
 
-  // Remove welcome if present
-  const welcome = messages.querySelector('.ai-welcome');
-  if (welcome) welcome.remove();
-
   const div = document.createElement('div');
-  div.className = `ai-msg ${role}`;
+  div.className = 'ai-msg ' + role;
   const bubble = document.createElement('div');
   bubble.className = 'ai-msg-bubble';
 
-  // Bold markdown **text**
-  bubble.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Safe HTML render: bold + bullets + newlines
+  const safe = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+  bubble.innerHTML = safe;
 
   div.appendChild(bubble);
   messages.appendChild(div);

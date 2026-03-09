@@ -537,9 +537,9 @@
         </div>
       </div>
 
-      <!-- Stats row -->
+      <!-- Stats row — 3 pills + send announcement -->
       <div class="ms-stats-row" id="msStatsRow" style="width:100%;max-width:360px;">
-        <!-- Populated by JS -->
+        <!-- Populated by JS, last pill is send announcement if authorized -->
       </div>
 
       <!-- Module buttons -->
@@ -563,34 +563,18 @@
           <div class="ms-btn-arrow">←</div>
         </button>
 
-        <button onclick="openSickTodayFromSelector()" id="sickTodayModuleBtn" class="ms-module-btn danger-btn">
-          <div class="ms-btn-icon">🤒</div>
-          <div style="text-align:right;flex:1;">
-            <div class="ms-btn-title">מי חולה היום</div>
-            <div id="sickTodayModuleCount" class="ms-btn-sub">לחץ לצפייה ודיווח מחלה</div>
-          </div>
-          <div class="ms-btn-arrow">←</div>
-        </button>
-
-        <button onclick="openWhereIsEmployee()" class="ms-module-btn">
-          <div class="ms-btn-icon">🔍</div>
-          <div style="text-align:right;flex:1;">
-            <div class="ms-btn-title">איפה כולם היום?</div>
-            <div class="ms-btn-sub">חפש עובד וראה היכן הוא</div>
-          </div>
-          <div class="ms-btn-arrow">←</div>
-        </button>
-
-        <!-- Send announcement button — visible only to authorized -->
-        <div id="moduleSendAnnBtn" style="display:none;">
-          <button onclick="openCeoMessage()" class="ms-module-btn primary-btn" style="width:100%;">
-            <div class="ms-btn-icon">📢</div>
-            <div style="text-align:right;flex:1;">
-              <div class="ms-btn-title">שלח הודעה לצוות</div>
-              <div class="ms-btn-sub" style="color:rgba(255,255,255,0.7);">שלח כל זה לכל העובדים</div>
+        <!-- AI Card — large, replaces the old sick/where buttons -->
+        <div class="ms-ai-card" onclick="openAIFromSelector()">
+          <div class="ms-ai-card-inner">
+            <div class="ms-ai-robot">
+              <div class="ms-ai-robot-face">🤖</div>
+              <div class="ms-ai-robot-glow"></div>
             </div>
-            <div class="ms-btn-arrow">←</div>
-          </button>
+            <div class="ms-ai-card-text">
+              <div class="ms-ai-card-title">AI CHAT BOT</div>
+              <div class="ms-ai-card-sub">שאל אותי כל שאלה על חופשות ונוכחות</div>
+            </div>
+          </div>
         </div>
 
       </div>
