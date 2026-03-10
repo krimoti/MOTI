@@ -465,7 +465,7 @@ function dateToStr(y, m, d) {
 // ============================================================
 
 function doLogin() {
-  const username = document.getElementById('loginUsername').value.trim();
+  const username = document.getElementById('loginUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value;
 
   if (!username || !password) {
@@ -473,31 +473,60 @@ function doLogin() {
     return;
   }
 
-  // ── Step 1: try local DB (fast path) ──────────────────────
-  const db = getDB();
-  const localUser = db.users[username.toLowerCase()] || db.users[username];
+  showLoginError('⏳ מאמת...');
 
-  // localUser may exist but with wrong password if DB wasn't synced yet.
-  // If Firebase is connected: ALWAYS verify against cloud first,
-  // then fall back to local if Firebase fails.
-  if (firebaseConnected && firebaseDB) {
-    showLoginError('⏳ מאמת...');
-    pullFromFirebase().then(() => {
-      const db2 = getDB();
-      const user2 = db2.users[username.toLowerCase()] || db2.users[username];
-      if (!user2) { showLoginError('שם משתמש לא קיים במערכת'); return; }
-      if (user2.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
-      _finishLogin(user2, password);
-    }).catch(() => {
-      // Firebase pull failed — fall back to local
-      if (!localUser) { showLoginError('שם משתמש לא קיים במערכת'); return; }
-      if (localUser.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
-      _finishLogin(localUser, password);
-    });
-    return;
+  // Always try to fetch fresh from Firestore directly — no dependency on firebaseConnected state
+  // This works even if initFirebase() hasn't finished yet
+  _loginFetchCloud(username, password);
+}
+
+async function _loginFetchCloud(username, password) {
+  try {
+    // Ensure Firebase SDK is loaded
+    if (!window.firebase) {
+      await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js');
+      await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js');
+    }
+    if (!firebase.apps?.length) firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.firestore();
+
+    // Fetch directly — bypasses all local state
+    const doc = await db.collection('vacationSystem').doc('data').get();
+    if (doc.exists) {
+      const data = doc.data();
+      const users = JSON.parse(data.users || '{}');
+      const user = users[username] || users[username.toLowerCase()];
+      if (!user) { showLoginError('שם משתמש לא קיים במערכת'); return; }
+      if (user.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
+      // Sync to local so app works offline after first login
+      const cloudDB = {
+        users,
+        vacations:        JSON.parse(data.vacations        || '{}'),
+        departments:      JSON.parse(data.departments      || '[]'),
+        approvalRequests: JSON.parse(data.approvalRequests || '[]'),
+        deptManagers:     JSON.parse(data.deptManagers     || '{}'),
+        auditLog:         JSON.parse(data.auditLog         || '[]'),
+        settings:         JSON.parse(data.settings         || '{}'),
+        permissions:      JSON.parse(data.permissions      || '{}'),
+        announcements:    JSON.parse(data.announcements    || '[]'),
+        sick:             JSON.parse(data.sick             || '{}'),
+        dailyStatus:      JSON.parse(data.dailyStatus      || '{}'),
+        handovers:        JSON.parse(data.handovers        || '{}'),
+      };
+      _saveDBLocal(cloudDB);
+      // Wire up global firebase state for the rest of the session
+      if (!firebaseDB) { firebaseDB = db; firebaseConnected = true; }
+      _finishLogin(user, password);
+      return;
+    }
+  } catch(err) {
+    console.warn('Cloud login failed:', err.message);
+    // Fall through to local
   }
 
-  // ── No Firebase — local only ───────────────────────────────
+  // Fallback: local DB (offline mode)
+  const localDB = getDB();
+  const localUser = localDB.users[username] || localDB.users[username.toLowerCase()];
   if (!localUser) { showLoginError('שם משתמש לא קיים במערכת'); return; }
   if (localUser.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
   _finishLogin(localUser, password);
@@ -3674,8 +3703,8 @@ function checkHandoverNeeded() {
   const alreadySubmitted = db.handovers && db.handovers[currentUser.username + '_' + tomorrowStr];
   if ((type === 'full' || type === 'half') && !alreadySubmitted && !sessionStorage.getItem('handoverShown_'+tomorrowStr)) {
     sessionStorage.setItem('handoverShown_'+tomorrowStr, '1');
-    const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
-    setTimeout(() => openModal('handoverModal'), delay);
+    // Delay enough for Firebase sync to complete
+    setTimeout(() => openModal('handoverModal'), 3000);
   }
 }
 
@@ -5600,6 +5629,7 @@ async function pullFromFirebase() {
         announcements:    JSON.parse(data.announcements || '[]'),
         sick:             JSON.parse(data.sick        || '{}'),
         dailyStatus:      JSON.parse(data.dailyStatus  || '{}'),
+        handovers:        JSON.parse(data.handovers     || '{}'),
       };
       // Always guarantee admin exists even if Firebase was wiped
       ensureAdminExists(cloudDB);
@@ -5635,6 +5665,7 @@ async function pushToFirebase() {
       announcements:    JSON.stringify(db.announcements || []),
       sick:             JSON.stringify(db.sick || {}),
       dailyStatus:      JSON.stringify(db.dailyStatus || {}),
+      handovers:        JSON.stringify(db.handovers || {}),
       updatedAt:        new Date().toISOString(),
       updatedBy:        currentUser?.username || 'system'
     });
@@ -5679,6 +5710,7 @@ function startRealtimeListener() {
         announcements:    JSON.parse(data.announcements || '[]'),
         sick:             JSON.parse(data.sick        || '{}'),
         dailyStatus:      JSON.parse(data.dailyStatus  || '{}'),
+        handovers:        JSON.parse(data.handovers     || '{}'),
       };
       ensureAdminExists(cloudDB);
       _saveDBLocal(cloudDB);
