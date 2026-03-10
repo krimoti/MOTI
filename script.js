@@ -459,10 +459,13 @@ function dateToStr(y, m, d) {
 // AUTH STATE
 // ============================================================
 
+let _currentLoginPassword = ''; // שמירת סיסמת הכניסה לשימוש בשינוי סיסמה
+
 function doLogin() {
   const username = document.getElementById('loginUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value;
   if (!username || !password) { showLoginError('נא למלא שם משתמש וסיסמה'); return; }
+  _currentLoginPassword = password;
   showLoginError('⏳ מאמת...');
   _loginWithCloud(username, password);
 }
@@ -4606,8 +4609,25 @@ async function doForcePasswordChange() {
   const fbEmail = currentUser.firebaseEmail || currentUser.email || '';
   try {
     const auth = await ensureFirebaseAuth();
-    const fbUser = auth.currentUser;
-    if (fbUser) await fbUser.updatePassword(pass);
+    let fbUser = auth.currentUser;
+
+    // אם אין session פעיל (למשל במחשב אחר) — מתחברים מחדש עם הסיסמה הישנה
+    if (!fbUser && fbEmail && _currentLoginPassword) {
+      try {
+        const cred = await auth.signInWithEmailAndPassword(fbEmail, _currentLoginPassword);
+        fbUser = cred.user;
+      } catch(e) { console.warn('Re-auth before pw update:', e.message); }
+    }
+
+    if (fbUser) {
+      // ריאימות מלאה (נדרש ע"י Firebase לפני updatePassword)
+      try {
+        const credential = firebase.auth.EmailAuthProvider.credential(fbUser.email, _currentLoginPassword);
+        await fbUser.reauthenticateWithCredential(credential);
+      } catch(e) { console.warn('reauthenticate:', e.message); }
+      await fbUser.updatePassword(pass);
+    }
+    _currentLoginPassword = '';
   } catch(e) { console.warn('Firebase pw update:', e.message); }
   auditLog('force_pass_change', `${savedUsername} הגדיר סיסמה אישית`);
   pushToFirebase();
