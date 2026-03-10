@@ -4188,47 +4188,61 @@ async function migrateExistingUsersToFirebase() {
     showToast('רק Admin יכול להריץ את ההעברה', 'warning'); return;
   }
   const db = getDB();
-  const users = Object.values(db.users).filter(u => u.status !== 'pending');
+  // Include ALL users (active + pending), skip only users already migrated
+  const users = Object.values(db.users);
   const tempPass = getSettings().tempPassword || 'Welcome1';
 
   let done = 0, skipped = 0, failed = 0, total = users.length;
   showToast(`⏳ מתחיל העברה של ${total} עובדים ל-Firebase Auth...`, 'info', 5000);
+  console.log(`%c🔐 מתחיל מיגרציה ל-Firebase Auth — ${total} עובדים, סיסמה: ${tempPass}`, 'color:#6C63FF;font-size:13px;font-weight:bold;');
 
   const processUser = async (i) => {
     if (i >= users.length) {
-      const summary = `✅ העברה הושלמה: ${done} חדשים | ${skipped} קיימים | ${failed} שגיאות`;
-      showToast(summary, done > 0 ? 'success' : 'warning', 8000);
+      const summary = `העברה הושלמה: ${done} חדשים | ${skipped} כבר קיימים | ${failed} שגיאות`;
+      showToast((failed > 0 ? '⚠️ ' : '✅ ') + summary, failed > 0 ? 'warning' : 'success', 10000);
       auditLog('firebase_migration', summary);
-      // Update Firebase Rules reminder
-      console.log('%c🔐 עכשיו עדכן Firebase Rules ל: allow read, write: if request.auth != null;', 'color:green;font-size:14px;font-weight:bold;');
+      pushToFirebase();
+      console.log(`%c✅ ${summary}`, 'color:green;font-size:13px;font-weight:bold;');
+      console.log('%c🔐 עכשיו עדכן Firebase Rules ל:
+allow read, write: if request.auth != null;', 'color:green;font-size:14px;font-weight:bold;');
       return;
     }
+
     const u = users[i];
-    const firebaseEmail = u.email || (u.username + '@dazura-hr.app');
+    const firebaseEmail = u.firebaseEmail || u.email || (u.username + '@dazura-hr.app');
+    console.log(`  [${i+1}/${total}] ${u.username} → ${firebaseEmail}`);
+
     const r = await createFirebaseAuthUser(firebaseEmail, tempPass);
+    console.log(`    result:`, r);
+
+    const db2 = getDB();
     if (r.success) {
-      // Save firebaseEmail to user record
-      const db2 = getDB();
       if (db2.users[u.username]) {
         if (!db2.users[u.username].email) db2.users[u.username].email = firebaseEmail;
         db2.users[u.username].firebaseEmail = firebaseEmail;
-        if (!db2.users[u.username].mustChangePassword) {
-          db2.users[u.username].mustChangePassword = true; // force reset on next login
-        }
+        db2.users[u.username].mustChangePassword = true;
         _saveDBLocal(db2);
       }
-      r.existing ? skipped++ : done++;
+      if (r.existing) {
+        skipped++;
+        console.log(`    ⏭️ כבר קיים ב-Firebase`);
+      } else {
+        done++;
+        console.log(`    ✅ נוצר חשבון חדש`);
+      }
     } else {
       failed++;
-      console.warn('Migration failed for', u.username, ':', r.error);
+      console.warn(`    ❌ שגיאה:`, r.error);
     }
-    if (i % 10 === 0 && i > 0) {
-      showToast(`⏳ מעביר... ${i}/${total}`, 'info', 2000);
+
+    if ((i + 1) % 5 === 0) {
+      showToast(`⏳ ${i + 1}/${total} עובדים...`, 'info', 1500);
     }
-    setTimeout(() => processUser(i + 1), 350); // 350ms between calls — avoids rate limit
+
+    setTimeout(() => processUser(i + 1), 400);
   };
 
-  await processUser(0);
+  processUser(0);
 }
 
 async function ensureFirebaseAuth() {
@@ -4256,21 +4270,27 @@ async function sendFirebasePasswordReset(email) {
 
 async function createFirebaseAuthUser(email, password) {
   try {
-    const auth = await ensureFirebaseAuth();
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    return { success: true, uid: cred.user.uid };
+    // ── Use a secondary Firebase app so Admin session is NOT replaced ──
+    await ensureFirebaseAuth(); // make sure SDK is loaded
+    if (!firebase.apps?.length) firebase.initializeApp(FIREBASE_CONFIG);
+
+    let secondaryApp;
+    const secondaryAppName = 'dazura-secondary';
+    try {
+      secondaryApp = firebase.app(secondaryAppName);
+    } catch(e) {
+      secondaryApp = firebase.initializeApp(FIREBASE_CONFIG, secondaryAppName);
+    }
+    const secondaryAuth = secondaryApp.auth();
+    const cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+    await secondaryAuth.signOut(); // sign out secondary immediately
+    return { success: true, uid };
   } catch(err) {
     if (err.code === 'auth/email-already-in-use') {
-      // Try to get existing UID by signing in
-      try {
-        const auth2 = await ensureFirebaseAuth();
-        const cred2 = await auth2.signInWithEmailAndPassword(email, password);
-        return { success: true, existing: true, uid: cred2.user.uid };
-      } catch(e2) {
-        return { success: true, existing: true };
-      }
+      return { success: true, existing: true };
     }
-    return { success: false, error: err.message };
+    return { success: false, error: err.code || err.message };
   }
 }
 
