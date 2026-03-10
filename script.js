@@ -1,3 +1,4 @@
+
 // DATA LAYER — localStorage based
 // ============================================================
 const DB_KEY = 'vacSystem_v3';
