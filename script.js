@@ -467,12 +467,12 @@ function dateToStr(y, m, d) {
 function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
-  
+
   if (!username || !password) {
     showLoginError('נא למלא שם משתמש וסיסמה');
     return;
   }
-  
+
   const db = getDB();
   const user = db.users[username.toLowerCase()] || db.users[username];
 
@@ -480,6 +480,8 @@ function doLogin() {
     showLoginError('שם משתמש לא קיים במערכת');
     return;
   }
+
+  // ── Step 1: verify local password (fast, offline-safe) ──────
   if (user.password !== hashPass(password)) {
     showLoginError('סיסמה שגויה');
     return;
@@ -504,8 +506,16 @@ function doLogin() {
     return;
   }
 
+  // ── Step 2: sign in to Firebase Auth (background, non-blocking) ──
+  if (user.email) {
+    ensureFirebaseAuth().then(auth => {
+      auth.signInWithEmailAndPassword(user.email, password).catch(() => {
+        // Firebase sign-in failed silently — app still works via local auth
+      });
+    }).catch(() => {});
+  }
+
   document.getElementById('loginScreen').classList.remove('active');
-  // ── Reset AI chat completely on new login ──
   if (typeof DazuraAI !== 'undefined') DazuraAI.clearHistory();
   const aiMsgs = document.getElementById('aiMessages');
   if (aiMsgs) aiMsgs.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI. שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
@@ -523,6 +533,8 @@ function doLogout() {
   if (aiMsgs) aiMsgs.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI. שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
   currentUser = null;
   hideAIButton();
+  // Sign out from Firebase Auth (background)
+  ensureFirebaseAuth().then(auth => auth.signOut()).catch(() => {});
   ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
   });
@@ -629,13 +641,22 @@ function doRegister() {
   };
   saveDB(db);
 
-  // Create Firebase Auth user if email provided
+  // ── Create Firebase Auth account ───────────────────────────
   const email = document.getElementById('regEmail')?.value.trim();
-  if (email) {
-    createFirebaseAuthUser(email, pass).then(r => {
-      if (!r.success) console.warn('Firebase Auth user creation failed:', r.error);
-    });
-  }
+  const firebaseEmail = email || (username + '@dazura-hr.app');
+  createFirebaseAuthUser(firebaseEmail, pass).then(async r => {
+    if (r.success && !r.existing) {
+      // Save firebaseEmail back to user record
+      const db2 = getDB();
+      if (db2.users[username]) {
+        if (!db2.users[username].email) db2.users[username].email = firebaseEmail;
+        db2.users[username].firebaseEmail = firebaseEmail;
+        saveDB(db2);
+      }
+    } else if (!r.success) {
+      console.warn('Firebase Auth registration failed:', r.error);
+    }
+  });
   
   closeModal('registerModal');
   if (requireApproval) {
@@ -4159,6 +4180,57 @@ function clearAuditLog() {
 // ============================================================
 // 🔐 FIREBASE AUTH — Password Reset (replaces all manual steps)
 // ============================================================
+// ============================================================
+// 🔐 FIREBASE AUTH MIGRATION — Admin only, runs once
+// ============================================================
+async function migrateExistingUsersToFirebase() {
+  if (currentUser?.role !== 'admin') {
+    showToast('רק Admin יכול להריץ את ההעברה', 'warning'); return;
+  }
+  const db = getDB();
+  const users = Object.values(db.users).filter(u => u.status !== 'pending');
+  const tempPass = getSettings().tempPassword || 'Welcome1';
+
+  let done = 0, skipped = 0, failed = 0, total = users.length;
+  showToast(`⏳ מתחיל העברה של ${total} עובדים ל-Firebase Auth...`, 'info', 5000);
+
+  const processUser = async (i) => {
+    if (i >= users.length) {
+      const summary = `✅ העברה הושלמה: ${done} חדשים | ${skipped} קיימים | ${failed} שגיאות`;
+      showToast(summary, done > 0 ? 'success' : 'warning', 8000);
+      auditLog('firebase_migration', summary);
+      // Update Firebase Rules reminder
+      console.log('%c🔐 עכשיו עדכן Firebase Rules ל: allow read, write: if request.auth != null;', 'color:green;font-size:14px;font-weight:bold;');
+      return;
+    }
+    const u = users[i];
+    const firebaseEmail = u.email || (u.username + '@dazura-hr.app');
+    const r = await createFirebaseAuthUser(firebaseEmail, tempPass);
+    if (r.success) {
+      // Save firebaseEmail to user record
+      const db2 = getDB();
+      if (db2.users[u.username]) {
+        if (!db2.users[u.username].email) db2.users[u.username].email = firebaseEmail;
+        db2.users[u.username].firebaseEmail = firebaseEmail;
+        if (!db2.users[u.username].mustChangePassword) {
+          db2.users[u.username].mustChangePassword = true; // force reset on next login
+        }
+        _saveDBLocal(db2);
+      }
+      r.existing ? skipped++ : done++;
+    } else {
+      failed++;
+      console.warn('Migration failed for', u.username, ':', r.error);
+    }
+    if (i % 10 === 0 && i > 0) {
+      showToast(`⏳ מעביר... ${i}/${total}`, 'info', 2000);
+    }
+    setTimeout(() => processUser(i + 1), 350); // 350ms between calls — avoids rate limit
+  };
+
+  await processUser(0);
+}
+
 async function ensureFirebaseAuth() {
   // Always ensure firebase-app is loaded first
   if (!window.firebase) {
@@ -4185,10 +4257,19 @@ async function sendFirebasePasswordReset(email) {
 async function createFirebaseAuthUser(email, password) {
   try {
     const auth = await ensureFirebaseAuth();
-    await auth.createUserWithEmailAndPassword(email, password);
-    return { success: true };
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    return { success: true, uid: cred.user.uid };
   } catch(err) {
-    if (err.code === 'auth/email-already-in-use') return { success: true, existing: true };
+    if (err.code === 'auth/email-already-in-use') {
+      // Try to get existing UID by signing in
+      try {
+        const auth2 = await ensureFirebaseAuth();
+        const cred2 = await auth2.signInWithEmailAndPassword(email, password);
+        return { success: true, existing: true, uid: cred2.user.uid };
+      } catch(e2) {
+        return { success: true, existing: true };
+      }
+    }
     return { success: false, error: err.message };
   }
 }
@@ -4405,14 +4486,46 @@ function applyBulkImport() {
   // Save locally first
   _saveDBLocal(db);
 
-  // Push to Firebase and restart listener only after push completes
+  // Push to Firebase DB and restart listener
   if (firebaseConnected && firebaseDB) {
     pushToFirebase().then(() => {
-      startRealtimeListener(); // restart listener only after push
+      startRealtimeListener();
     }).catch(err => {
       console.warn('Firebase push error:', err);
       startRealtimeListener();
     });
+  }
+
+  // ── Create Firebase Auth accounts for new employees (background) ──
+  if (added > 0) {
+    const newUsers = _bulkImportData.filter(p => !p.isUpdate);
+    let authCreated = 0, authFailed = 0;
+    const createNext = async (i) => {
+      if (i >= newUsers.length) {
+        if (authFailed > 0) showToast(`⚠️ ${authFailed} חשבונות Firebase לא נוצרו — בדוק קונסול`, 'warning', 6000);
+        else showToast(`🔐 ${authCreated} חשבונות Firebase Auth נוצרו בהצלחה`, 'success', 4000);
+        return;
+      }
+      const p = newUsers[i];
+      const firebaseEmail = p.email || (p.username + '@dazura-hr.app');
+      const r = await createFirebaseAuthUser(firebaseEmail, tempPass);
+      if (r.success) {
+        authCreated++;
+        // Save firebaseEmail to DB user
+        const db2 = getDB();
+        if (db2.users[p.username]) {
+          if (!db2.users[p.username].email) db2.users[p.username].email = firebaseEmail;
+          db2.users[p.username].firebaseEmail = firebaseEmail;
+        }
+        _saveDBLocal(db2);
+      } else {
+        authFailed++;
+        console.warn('Firebase Auth failed for', p.username, ':', r.error);
+      }
+      // Small delay to avoid rate limiting
+      setTimeout(() => createNext(i + 1), 300);
+    };
+    setTimeout(() => createNext(0), 1000);
   }
 
   closeModal('bulkImportModal');
@@ -4420,7 +4533,7 @@ function applyBulkImport() {
     added   ? `✅ נוספו ${added} עובדים`   : '',
     updated ? `🔄 עודכנו ${updated} עובדים` : ''
   ].filter(Boolean).join(' | ');
-  showToast(msg + (added ? ` — סיסמה: "${tempPass}"` : ''), 'success', 8000);
+  showToast(msg + (added ? ` — סיסמה זמנית: "${tempPass}"` : ''), 'success', 8000);
   auditLog('bulk_import', `${added} נוספו, ${updated} עודכנו — סיסמה: ${tempPass}`);
   renderAdmin();
   _bulkImportData = [];
@@ -4531,14 +4644,14 @@ function showForcePasswordChange() {
   document.getElementById('forcePassError').style.display = 'none';
 }
 
-function doForcePasswordChange() {
+async function doForcePasswordChange() {
   const pass  = document.getElementById('forcePassNew').value;
   const pass2 = document.getElementById('forcePassNew2').value;
   const errEl = document.getElementById('forcePassError');
   errEl.style.display = 'none';
 
-  if (pass.length < 4) {
-    errEl.textContent = 'הסיסמה חייבת להיות לפחות 4 תווים';
+  if (pass.length < 6) {
+    errEl.textContent = 'הסיסמה חייבת להיות לפחות 6 תווים';
     errEl.style.display = 'block'; return;
   }
   if (pass !== pass2) {
@@ -4546,19 +4659,41 @@ function doForcePasswordChange() {
     errEl.style.display = 'block'; return;
   }
 
+  // ── Update local DB ──────────────────────────────────────────
   const db = getDB();
   db.users[currentUser.username].password = hashPass(pass);
   db.users[currentUser.username].mustChangePassword = false;
   saveDB(db);
-  currentUser = db.users[currentUser.username];
 
   const savedUsername = currentUser.username;
-  auditLog('force_pass_change', `${savedUsername} שינה סיסמה זמנית`);
+  const userEmail = currentUser.email || '';
+
+  // ── Update Firebase Auth password ───────────────────────────
+  if (userEmail) {
+    try {
+      const auth = await ensureFirebaseAuth();
+      // Sign in with temp password first, then update
+      const tempPass = getSettings().tempPassword || 'Welcome1';
+      try {
+        await auth.signInWithEmailAndPassword(userEmail, tempPass);
+      } catch(e) {
+        // may already be signed in or temp pass different — try updatePassword directly
+      }
+      const fbUser = auth.currentUser;
+      if (fbUser) {
+        await fbUser.updatePassword(pass);
+      }
+    } catch(e) {
+      console.warn('Firebase password update failed:', e.message);
+      // App still works — local password is updated
+    }
+  }
+
+  auditLog('force_pass_change', `${savedUsername} הגדיר סיסמה אישית`);
   pushToFirebase();
   currentUser = null;
   document.getElementById('forcePasswordScreen').classList.remove('active');
-  showToast('✅ סיסמה עודכנה! התחבר עם הסיסמה החדשה.', 'success');
-  // Return to login screen
+  showToast('✅ סיסמה הוגדרה בהצלחה! כעת התחבר.', 'success');
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginUsername').value = savedUsername;
   document.getElementById('loginPassword').value = '';
