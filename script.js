@@ -473,30 +473,34 @@ function doLogin() {
     return;
   }
 
+  // ── Step 1: try local DB (fast path) ──────────────────────
   const db = getDB();
-  const user = db.users[username.toLowerCase()] || db.users[username];
+  const localUser = db.users[username.toLowerCase()] || db.users[username];
 
-  if (!user) {
-    // User not found locally — try pulling from Firebase first
-    if (firebaseConnected && firebaseDB) {
-      showLoginError('⏳ מאמת...');
-      pullFromFirebase().then(() => {
-        const db2 = getDB();
-        const user2 = db2.users[username.toLowerCase()] || db2.users[username];
-        if (!user2) { showLoginError('שם משתמש לא קיים במערכת'); return; }
-        if (user2.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
-        _finishLogin(user2, password);
-      }).catch(() => showLoginError('שם משתמש לא קיים במערכת'));
-    } else {
-      showLoginError('שם משתמש לא קיים במערכת');
-    }
+  // localUser may exist but with wrong password if DB wasn't synced yet.
+  // If Firebase is connected: ALWAYS verify against cloud first,
+  // then fall back to local if Firebase fails.
+  if (firebaseConnected && firebaseDB) {
+    showLoginError('⏳ מאמת...');
+    pullFromFirebase().then(() => {
+      const db2 = getDB();
+      const user2 = db2.users[username.toLowerCase()] || db2.users[username];
+      if (!user2) { showLoginError('שם משתמש לא קיים במערכת'); return; }
+      if (user2.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
+      _finishLogin(user2, password);
+    }).catch(() => {
+      // Firebase pull failed — fall back to local
+      if (!localUser) { showLoginError('שם משתמש לא קיים במערכת'); return; }
+      if (localUser.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
+      _finishLogin(localUser, password);
+    });
     return;
   }
-  if (user.password !== hashPass(password)) {
-    showLoginError('סיסמה שגויה');
-    return;
-  }
-  _finishLogin(user, password);
+
+  // ── No Firebase — local only ───────────────────────────────
+  if (!localUser) { showLoginError('שם משתמש לא קיים במערכת'); return; }
+  if (localUser.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
+  _finishLogin(localUser, password);
 }
 
 function _finishLogin(user, password) {

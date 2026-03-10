@@ -961,21 +961,17 @@ tbody tr:hover { background: var(--surface2); }
 .modal {
   background: var(--surface);
   border-radius: var(--radius-xl);
-  padding: 24px;
+  padding: 28px;
   width: 100%;
   max-width: 500px;
-  max-height: min(88vh, 680px);
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
   box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.06);
   animation: modalIn 0.32s var(--ease-spring);
   direction: rtl;
   border: 1px solid var(--border);
-  overflow: hidden;
-}
-.modal > *:not(.modal-title):not(.modal-footer) {
-  overflow-y: auto;
-  flex: 1;
 }
 @keyframes modalIn {
   from { opacity:0; transform: scale(0.88) translateY(-24px); }
@@ -998,10 +994,8 @@ tbody tr:hover { background: var(--surface2); }
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 20px;
   flex-shrink: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
 }
 
 /* ============================================================
@@ -1859,16 +1853,21 @@ tbody tr:hover { background: var(--surface2); }
   }
   .modal-title { font-size: 17px; margin-bottom: 14px; }
   .modal {
-    padding: 18px 16px;
-    max-height: min(92vh, 600px);
+    padding: 20px 16px;
+    max-height: 88vh;
     border-radius: 20px 20px 0 0;
+    overflow-y: auto;
   }
   .modal-footer {
     flex-direction: column-reverse;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 14px;
     padding-bottom: max(8px, env(safe-area-inset-bottom));
     flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    padding-top: 8px;
   }
   .modal-footer .btn {
     width: 100%;

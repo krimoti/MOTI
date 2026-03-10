@@ -338,32 +338,28 @@
 
 <!-- Handover Modal -->
 <div class="modal-overlay" id="handoverModal">
-  <div class="modal" style="max-width:460px;max-height:min(90vh,580px);">
-    <div class="modal-title" style="margin-bottom:12px;">
-      <span>📋</span> פרוטוקול העברת מקל
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-title">📋 פרוטוקול העברת מקל</div>
+    <div style="background:var(--warning-light);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#78350f;">
+      ⏰ מחר אתה בחופשה! שתף את הצוות במה שחשוב.
     </div>
-    <div style="overflow-y:auto;flex:1;padding-right:2px;">
-      <div style="background:var(--warning-light);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#78350f;">
-        ⏰ מחר אתה בחופשה! לפני שתצא — שתף את הצוות במה שחשוב.
-      </div>
-      <div class="form-group">
-        <label class="form-label">1. משימה דחופה ראשונה</label>
-        <input type="text" id="handover1" class="form-input" placeholder="לדוגמה: לסיים הצעת מחיר ללקוח X" dir="rtl">
-      </div>
-      <div class="form-group">
-        <label class="form-label">2. משימה דחופה שנייה</label>
-        <input type="text" id="handover2" class="form-input" placeholder="לדוגמה: לאשר PR מס' 142" dir="rtl">
-      </div>
-      <div class="form-group">
-        <label class="form-label">3. משימה דחופה שלישית</label>
-        <input type="text" id="handover3" class="form-input" placeholder="לדוגמה: פגישה עם ספק ביום ג'" dir="rtl">
-      </div>
-      <div class="form-group" style="margin-bottom:4px;">
-        <label class="form-label">מי מחליף אותך? (אופציונלי)</label>
-        <input type="text" id="handoverContact" class="form-input" placeholder="שם + טלפון / מייל" dir="rtl">
-      </div>
+    <div class="form-group">
+      <label class="form-label">1. משימה ראשונה</label>
+      <input type="text" id="handover1" class="form-input" placeholder="לדוגמה: לסיים הצעת מחיר ללקוח X" dir="rtl">
     </div>
-    <div class="modal-footer" style="flex-shrink:0;margin-top:12px;">
+    <div class="form-group">
+      <label class="form-label">2. משימה שנייה</label>
+      <input type="text" id="handover2" class="form-input" placeholder="לדוגמה: לאשר PR מס' 142" dir="rtl">
+    </div>
+    <div class="form-group">
+      <label class="form-label">3. משימה שלישית</label>
+      <input type="text" id="handover3" class="form-input" placeholder="לדוגמה: פגישה עם ספק ביום ג'" dir="rtl">
+    </div>
+    <div class="form-group">
+      <label class="form-label">מי מחליף אותך? (אופציונלי)</label>
+      <input type="text" id="handoverContact" class="form-input" placeholder="שם + טלפון / מייל" dir="rtl">
+    </div>
+    <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('handoverModal')">אחר כך</button>
       <button class="btn btn-primary" onclick="saveHandover()">💾 שמור ושלח לצוות</button>
     </div>
@@ -1526,9 +1522,9 @@
 
 <!-- FIREBASE MODAL -->
 <div class="modal-overlay" id="firebaseModal">
-  <div class="modal" style="max-width:500px;">
+  <div class="modal" style="max-width:480px;">
     <div class="modal-title">🔥 חיבור ל-Firebase</div>
-    <div id="firebaseStatusDiv" style="margin-bottom:16px;"></div>
+    <div id="firebaseStatusDiv" style="margin-bottom:14px;"></div>
     <div class="form-group">
       <label class="form-label">Project ID</label>
       <input type="text" id="fbProjectId" class="form-input" dir="ltr" placeholder="vaction-system">
@@ -1537,22 +1533,20 @@
       <label class="form-label">API Key</label>
       <input type="text" id="fbApiKey" class="form-input" dir="ltr" placeholder="AIzaSy...">
     </div>
-    <div style="background:var(--surface2);border-radius:10px;padding:12px;font-size:12px;color:var(--text-secondary);margin-bottom:16px;">
-      <strong>פרויקט:</strong> vaction-system<br>
-      <strong>Region:</strong> us-central1<br>
-      כל הנתונים יסונכרנו ב-Firestore תחת collection: <code>vacationSystem</code>
+    <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+      <strong>פרויקט:</strong> vaction-system &nbsp;|&nbsp; <strong>Region:</strong> us-central1<br>
+      סנכרון ב-Firestore תחת collection: <code>vacationSystem</code>
     </div>
-    <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:12px;font-size:12px;margin-bottom:14px;">
-      <strong>🔐 העברת משתמשים ל-Firebase Auth</strong><br>
-      לחץ להעברת כל העובדים הקיימים. כל עובד יקבל סיסמה זמנית ויידרש לאפס בכניסה הבאה.
+    <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:4px;">
+      <strong>🔐 העברת משתמשים ל-Firebase Auth</strong> — כל עובד יקבל סיסמה זמנית ויידרש לאפס בכניסה הבאה.
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px;padding:16px 0 0;">
-      <button class="btn btn-primary" onclick="connectFirebase()" style="width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;box-shadow:0 4px 12px rgba(245,158,11,0.3);">🔥 התחבר ל-Firebase</button>
+    <div class="modal-footer" style="flex-direction:column;gap:8px;">
+      <button class="btn btn-primary" onclick="connectFirebase()" style="width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;">🔥 התחבר ל-Firebase</button>
       <button class="btn btn-outline" onclick="migrateExistingUsersToFirebase()" style="width:100%;background:#e8f5e9;color:#2e7d32;border-color:#2e7d32;">🔐 העבר עובדים ל-Auth</button>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;width:100%;">
         <button class="btn btn-outline" style="flex:1;" onclick="closeModal('firebaseModal')">סגור</button>
         <button class="btn btn-outline" onclick="disconnectFirebase()" id="fbDisconnectBtn" style="display:none;flex:1;">🔌 התנתק</button>
-        <button class="btn btn-outline" onclick="resetFirebase()" id="fbResetBtn" style="display:none;flex:1;background:var(--danger-light);color:var(--danger);border-color:var(--danger);">🗑️ אפס</button>
+        <button class="btn btn-outline" onclick="resetFirebase()" id="fbResetBtn" style="display:none;flex:1;color:var(--danger);border-color:var(--danger);">🗑️ אפס</button>
       </div>
     </div>
   </div>
