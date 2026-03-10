@@ -6380,8 +6380,30 @@ window.addEventListener('load', function() {
     setTimeout(() => {
       splash.style.display = 'none';
       if(splash.parentNode) splash.remove();
+      // ── Safety net: make sure login screen is visible ──────
+      const loginScreen = document.getElementById('loginScreen');
+      const anyActive = ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen']
+        .some(id => document.getElementById(id)?.classList.contains('active'));
+      if (loginScreen && !anyActive) {
+        loginScreen.classList.add('active');
+      }
     }, 700);
   }, duration);
+
+  // ── Hard timeout: if Firebase hangs >8s — show login anyway ──
+  setTimeout(() => {
+    const s = document.getElementById('dazura-splash');
+    if (s) {
+      s.style.display = 'none';
+      if (s.parentNode) s.remove();
+    }
+    const loginScreen = document.getElementById('loginScreen');
+    const anyActive = ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen']
+      .some(id => document.getElementById(id)?.classList.contains('active'));
+    if (loginScreen && !anyActive) {
+      loginScreen.classList.add('active');
+    }
+  }, Math.max(duration + 2000, 8000));
 });
 
 
