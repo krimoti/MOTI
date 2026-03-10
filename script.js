@@ -38,20 +38,19 @@ function ensureAdminExists(db) {
   if (!db.settings) db.settings = {};
   if (!db.vacations) db.vacations = {};
 
-  // Do NOT auto-create admin with a default password —
-  // this caused phantom login issues on new devices.
-  // Admin will be fetched from Firebase on first login.
+  // Do not auto-create admin with a hardcoded password on new devices.
+  // The real admin comes from Firebase. Sentinel password never matches any real hash.
   if (!db.users['admin']) {
     db.users['admin'] = {
       fullName: 'מנהל מערכת',
       username: 'admin',
-      password: '__CLOUD_ONLY__',   // sentinel — never matches any real hashPass
+      password: '__CLOUD_ONLY__',
       dept: ['הנהלה'],
       role: 'admin',
       status: 'active',
       quotas: { '2026': { annual: 22, initialBalance: 0 } }
     };
-    // Do NOT _saveDBLocal here — force cloud fetch on login
+    // intentionally NOT saving to localStorage — force cloud fetch
   }
 }
 
@@ -463,22 +462,16 @@ function dateToStr(y, m, d) {
 function doLogin() {
   const username = document.getElementById('loginUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value;
-
-  if (!username || !password) {
-    showLoginError('נא למלא שם משתמש וסיסמה');
-    return;
-  }
-
+  if (!username || !password) { showLoginError('נא למלא שם משתמש וסיסמה'); return; }
   showLoginError('⏳ מאמת...');
-
-  // Always try to fetch fresh from Firestore directly — no dependency on firebaseConnected state
-  // This works even if initFirebase() hasn't finished yet
-  _loginFetchCloud(username, password);
+  _loginWithCloud(username, password);
 }
 
-async function _loginFetchCloud(username, password) {
+// Fetches fresh user data from Firestore on every login attempt.
+// Handles Firebase Rules (auth required) by signing in to Firebase Auth first.
+async function _loginWithCloud(username, password) {
   try {
-    // Step 1: Ensure Firebase SDKs loaded
+    // Load SDKs if not yet loaded
     if (!window.firebase) {
       await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js');
       await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js');
@@ -488,63 +481,48 @@ async function _loginFetchCloud(username, password) {
     const auth = firebase.auth();
     const fsdb = firebase.firestore();
 
-    // Step 2: Find what firebase email this username maps to.
-    // Try fetching Firestore without auth first — works if Rules are open.
-    // If that fails (Permission Denied), try Auth login with known email patterns.
+    // First try direct Firestore read (works if Rules allow unauthenticated read)
     let doc = null;
-    let authedViaFirebase = false;
+    try { doc = await fsdb.collection('vacationSystem').doc('data').get(); } catch(e) {}
 
-    // First attempt: direct read (works when rules are allow read: if true OR user already authed)
-    try {
-      doc = await fsdb.collection('vacationSystem').doc('data').get();
-    } catch(e) {
-      doc = null; // Permission denied — need to auth first
-    }
-
+    // If blocked by Rules — authenticate via Firebase Auth first
     if (!doc || !doc.exists) {
-      // Step 2b: Try Firebase Auth with candidate emails, then re-read
-      const candidateEmails = [
-        username + '@dazura-hr.app',
-        username + '@company.co.il',
-      ];
-      // Also check local DB for stored firebaseEmail
+      // Build candidate email list: stored email > dazura-hr.app > company.co.il
+      const emails = new Set();
       try {
-        const localRaw = JSON.parse(localStorage.getItem(DB_KEY) || '{}');
-        const localU = localRaw.users?.[username];
-        if (localU?.firebaseEmail) candidateEmails.unshift(localU.firebaseEmail);
-        if (localU?.email) candidateEmails.unshift(localU.email);
+        const localRaw = JSON.parse(localStorage.getItem('vacSystem_v3') || '{}');
+        const lu = localRaw.users?.[username];
+        if (lu?.firebaseEmail) emails.add(lu.firebaseEmail);
+        if (lu?.email) emails.add(lu.email);
       } catch(e) {}
+      emails.add(username + '@dazura-hr.app');
+      emails.add(username + '@company.co.il');
 
-      for (const email of [...new Set(candidateEmails)]) {
+      let authed = false;
+      for (const email of emails) {
         try {
           await auth.signInWithEmailAndPassword(email, password);
-          authedViaFirebase = true;
-          break;
+          authed = true; break;
         } catch(e) {
-          if (e.code === 'auth/wrong-password') {
-            // Email matched but password wrong — definitive
-            showLoginError('סיסמה שגויה');
-            return;
+          if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+            showLoginError('סיסמה שגויה'); return;
           }
-          // auth/user-not-found — try next email
+          // user-not-found — try next email
         }
       }
-
-      if (authedViaFirebase) {
-        try { doc = await fsdb.collection('vacationSystem').doc('data').get(); }
-        catch(e) { doc = null; }
+      if (authed) {
+        try { doc = await fsdb.collection('vacationSystem').doc('data').get(); } catch(e) {}
       }
     }
 
     if (doc && doc.exists) {
       const data = doc.data();
       const users = JSON.parse(data.users || '{}');
-      const user = users[username] || users[username.toLowerCase()];
+      const user = users[username];
       if (!user) { showLoginError('שם משתמש לא קיים במערכת'); return; }
-      // Verify password against our DB hash
       if (user.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
 
-      // Sync full DB to local
+      // Sync full cloud DB to localStorage for offline use
       const cloudDB = {
         users,
         vacations:        JSON.parse(data.vacations        || '{}'),
@@ -560,7 +538,7 @@ async function _loginFetchCloud(username, password) {
         handovers:        JSON.parse(data.handovers        || '{}'),
       };
       _saveDBLocal(cloudDB);
-      if (!firebaseDB) { firebaseDB = fsdb; firebaseConnected = true; }
+      if (!firebaseDB) { firebaseDB = fsdb; firebaseConnected = true; startRealtimeListener(); }
       _finishLogin(user, password);
       return;
     }
@@ -568,20 +546,20 @@ async function _loginFetchCloud(username, password) {
     console.warn('Cloud login error:', err.message);
   }
 
-  // Fallback: local DB only (offline)
+  // Offline fallback — use local DB only
   const localDB = getDB();
-  const localUser = localDB.users[username] || localDB.users[username.toLowerCase()];
-  if (!localUser) { showLoginError('שם משתמש לא קיים במערכת'); return; }
+  const localUser = localDB.users[username];
+  if (!localUser || localUser.password === '__CLOUD_ONLY__') {
+    showLoginError('לא ניתן להתחבר — בדוק חיבור לאינטרנט'); return;
+  }
   if (localUser.password !== hashPass(password)) { showLoginError('סיסמה שגויה'); return; }
   _finishLogin(localUser, password);
 }
 
 function _finishLogin(user, password) {
-
   currentUser = user;
   hideLoginError();
 
-  // Block pending users
   if (!isUserActive(user)) {
     document.getElementById('loginScreen').classList.remove('active');
     document.getElementById('pendingApprovalScreen').classList.add('active');
@@ -589,20 +567,16 @@ function _finishLogin(user, password) {
     currentUser = null;
     return;
   }
-
-  // Force password change on first login
   if (user.mustChangePassword) {
     document.getElementById('loginScreen').classList.remove('active');
     showForcePasswordChange();
     return;
   }
 
-  // Firebase Auth sign-in (background — non-blocking)
+  // Firebase Auth sign-in background (for session continuity)
   const fbEmail = user.firebaseEmail || user.email || '';
   if (fbEmail) {
-    ensureFirebaseAuth().then(auth => {
-      auth.signInWithEmailAndPassword(fbEmail, password).catch(() => {});
-    }).catch(() => {});
+    ensureFirebaseAuth().then(a => a.signInWithEmailAndPassword(fbEmail, password).catch(()=>{})).catch(()=>{});
   }
 
   document.getElementById('loginScreen').classList.remove('active');
@@ -623,7 +597,7 @@ function doLogout() {
   if (aiMsgs) aiMsgs.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI. שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
   currentUser = null;
   hideAIButton();
-  ensureFirebaseAuth().then(auth => auth.signOut()).catch(() => {});
+  ensureFirebaseAuth().then(a => a.signOut()).catch(() => {});
   ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
   });
@@ -730,18 +704,18 @@ function doRegister() {
   };
   saveDB(db);
 
-  // Create Firebase Auth account (always — use fake email if none provided)
-  const email = document.getElementById('regEmail')?.value.trim();
-  const firebaseEmail = email || (username + '@dazura-hr.app');
-  createFirebaseAuthUser(firebaseEmail, pass).then(r => {
+  // Always create Firebase Auth account
+  const email = document.getElementById('regEmail')?.value.trim() || '';
+  const fbEmail = email || (username + '@dazura-hr.app');
+  createFirebaseAuthUser(fbEmail, pass).then(r => {
     if (r.success) {
       const db2 = getDB();
       if (db2.users[username]) {
-        if (!db2.users[username].email) db2.users[username].email = firebaseEmail;
-        db2.users[username].firebaseEmail = firebaseEmail;
+        if (!db2.users[username].email) db2.users[username].email = fbEmail;
+        db2.users[username].firebaseEmail = fbEmail;
         saveDB(db2);
       }
-    } else { console.warn('Firebase Auth registration failed:', r.error); }
+    }
   });
   
   closeModal('registerModal');
@@ -3747,7 +3721,6 @@ function checkHandoverNeeded() {
   const alreadySubmitted = db.handovers && db.handovers[currentUser.username + '_' + tomorrowStr];
   if ((type === 'full' || type === 'half') && !alreadySubmitted && !sessionStorage.getItem('handoverShown_'+tomorrowStr)) {
     sessionStorage.setItem('handoverShown_'+tomorrowStr, '1');
-    // Delay enough for Firebase sync to complete
     setTimeout(() => openModal('handoverModal'), 3000);
   }
 }
@@ -3764,10 +3737,13 @@ function saveHandover() {
   if (!db.handovers) db.handovers = {};
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
   const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const dateHeb = tomorrow.toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
+  // Find manager
   const managerUsername = getDeptManagerForUser(currentUser.username);
   const managerUser = managerUsername ? db.users[managerUsername] : null;
-  const managerName = managerUser ? managerUser.fullName : '';
+  const managerName = managerUser?.fullName || 'המנהל';
+  const managerEmail = managerUser?.email || '';
 
   const key = currentUser.username + '_' + tomorrowStr;
   db.handovers[key] = {
@@ -3778,55 +3754,56 @@ function saveHandover() {
     createdAt: new Date().toISOString()
   };
   saveDB(db);
+  pushToFirebase();
   closeModal('handoverModal');
   auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
-
-  // Refresh manager view if already logged in
-  if (typeof renderHandoverList === 'function') renderHandoverList();
   updateHandoverBadge();
-
-  const toMsg = managerName ? ' — ' + managerName + ' יראה אותו בלוח המנהל' : '';
+  const toMsg = managerName ? ` — ${managerName} יראה אותו בלוח המנהל` : '';
   showToast('✅ פרוטוקול נשמר' + toMsg, 'success');
 }
 
 // ── Show pending handovers to manager on login ──────────────────
 function checkPendingHandovers() {
   if (!currentUser) return;
-  const isManager = currentUser.role === 'manager' || currentUser.role === 'admin' || isUserDeptManager(currentUser.username);
+  const isManager = ['manager','admin'].includes(currentUser.role) || isUserDeptManager(currentUser.username);
   if (!isManager) return;
   const db = getDB();
   const handovers = db.handovers || {};
   const today = new Date().toISOString().split('T')[0];
-
   const mine = Object.values(handovers).filter(h =>
-    h.managerUsername === currentUser.username &&
+    (h.managerUsername === currentUser.username || (!h.managerUsername && currentUser.role==='admin')) &&
     !h.seenByManager && h.date >= today
   );
-  if (currentUser.role === 'admin') {
-    Object.values(handovers).forEach(h => {
-      if (!h.managerUsername && !h.seenByManager && h.date >= today && !mine.includes(h)) mine.push(h);
-    });
-  }
   if (!mine.length) return;
 
   let html = '';
   mine.forEach(h => {
-    const dateHeb = new Date(h.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
-    const key = encodeURIComponent(h.user + '_' + h.date);
+    const dateHeb = new Date(h.date+'T12:00:00').toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'});
+    const enc = encodeURIComponent(h.user+'_'+h.date);
     html += `<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:12px;border-right:4px solid var(--primary);">`;
     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">`;
     html += `<div style="font-weight:800;font-size:15px;">👤 ${h.fullName} — ${dateHeb}</div>`;
-    html += `<button onclick="exportHandoverPDF('${key}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;">📄 PDF</button>`;
+    html += `<button onclick="exportHandoverPDF('${enc}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;">📄 PDF</button>`;
     html += `</div>`;
-    h.tasks.forEach((t,i) => { html += `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;">${i+1}. ${t}</div>`; });
+    h.tasks.forEach((t,i) => { html += `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:3px;">${i+1}. ${t}</div>`; });
     if (h.contact) html += `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📞 מחליף/ה: ${h.contact}</div>`;
     html += `</div>`;
   });
-
-  showHandoverNotificationModal(html, mine.length, mine);
+  showHandoverNotificationModal(html, mine, mine.length);
 }
 
-function showHandoverNotificationModal(html, count, handoverList) {
+function markHandoversSeen(list) {
+  const db = getDB();
+  (list||[]).forEach(h => {
+    const key = h.user+'_'+h.date;
+    if (db.handovers?.[key]) db.handovers[key].seenByManager = true;
+  });
+  saveDB(db);
+  if (typeof renderHandoverList==='function') renderHandoverList();
+  updateHandoverBadge();
+}
+
+function showHandoverNotificationModal(html, handoverList, count) {
   let modal = document.getElementById('handoverNotifModal');
   if (!modal) {
     modal = document.createElement('div');
@@ -3835,32 +3812,20 @@ function showHandoverNotificationModal(html, count, handoverList) {
     modal.innerHTML = `
       <div class="modal" style="max-width:480px;">
         <div class="modal-title">📋 פרוטוקולי העברת מקל חדשים</div>
-        <div id="handoverNotifBody" style="max-height:60vh;overflow-y:auto;"></div>
+        <div id="handoverNotifBody" style="max-height:55vh;overflow-y:auto;"></div>
         <div class="modal-footer" style="gap:10px;">
           <button class="btn btn-outline" onclick="showTab('manager');closeModal('handoverNotifModal');">👁️ לוח מנהל</button>
-          <button class="btn btn-primary" onclick="markHandoversSeen();closeModal('handoverNotifModal');">✅ הבנתי</button>
+          <button class="btn btn-primary" id="handoverSeenBtn">✅ הבנתי</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
-    modal.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('open'); });
+    modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
   }
   modal._handoverList = handoverList || [];
+  document.getElementById('handoverSeenBtn').onclick = () => { markHandoversSeen(modal._handoverList); closeModal('handoverNotifModal'); };
   document.getElementById('handoverNotifBody').innerHTML =
-    `<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">יש לך <strong>${count}</strong> פרוטוקול${count>1?'ות':''} חד${count>1?'שים':'ש'} ממתינ${count>1?'ים':''}:</div>` + html;
+    `<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">יש לך <strong>${count}</strong> פרוטוקול${count>1?'ות':''} חד${count>1?'שים':'ש'}:</div>` + html;
   setTimeout(() => openModal('handoverNotifModal'), 1800);
-}
-
-function markHandoversSeen() {
-  const modal = document.getElementById('handoverNotifModal');
-  const list = modal ? (modal._handoverList || []) : [];
-  if (!list.length) return;
-  const db = getDB();
-  list.forEach(h => {
-    const key = h.user + '_' + h.date;
-    if (db.handovers && db.handovers[key]) db.handovers[key].seenByManager = true;
-  });
-  saveDB(db);
-  if (typeof renderHandoverList === 'function') renderHandoverList();
 }
 
 
@@ -4210,50 +4175,6 @@ function clearAuditLog() {
 // ============================================================
 // 🔐 FIREBASE AUTH — Password Reset (replaces all manual steps)
 // ============================================================
-// ============================================================
-// 🔐 FIREBASE AUTH MIGRATION — Admin only
-// ============================================================
-async function migrateExistingUsersToFirebase() {
-  if (currentUser?.role !== 'admin') { showToast('רק Admin יכול להריץ את ההעברה', 'warning'); return; }
-  const db = getDB();
-  const users = Object.values(db.users);
-  const tempPass = getSettings().tempPassword || 'Welcome1';
-  const safePass = tempPass.length >= 6 ? tempPass : tempPass.padEnd(6, '1');
-
-  let done = 0, skipped = 0, failed = 0, total = users.length;
-  showToast(`⏳ מתחיל העברה של ${total} עובדים ל-Firebase Auth...`, 'info', 5000);
-  console.log(`%c🔐 מיגרציה ל-Firebase Auth — ${total} עובדים, סיסמה: ${safePass}`, 'color:#6C63FF;font-size:13px;font-weight:bold;');
-
-  const processUser = async (i) => {
-    if (i >= users.length) {
-      const summary = `העברה הושלמה: ${done} חדשים | ${skipped} קיימים | ${failed} שגיאות`;
-      showToast((failed > 0 ? '⚠️ ' : '✅ ') + summary, failed > 0 ? 'warning' : 'success', 10000);
-      auditLog('firebase_migration', summary);
-      pushToFirebase();
-      console.log(`%c✅ ${summary}`, 'color:green;font-size:13px;font-weight:bold;');
-      return;
-    }
-    const u = users[i];
-    const firebaseEmail = u.firebaseEmail || u.email || (u.username + '@dazura-hr.app');
-    console.log(`  [${i+1}/${total}] ${u.username} → ${firebaseEmail}`);
-    const r = await createFirebaseAuthUser(firebaseEmail, safePass);
-    console.log(`    result:`, r);
-    const db2 = getDB();
-    if (r.success) {
-      if (db2.users[u.username]) {
-        if (!db2.users[u.username].email) db2.users[u.username].email = firebaseEmail;
-        db2.users[u.username].firebaseEmail = firebaseEmail;
-        db2.users[u.username].mustChangePassword = true;
-        _saveDBLocal(db2);
-      }
-      r.existing ? skipped++ : done++;
-    } else { failed++; console.warn(`    ❌ שגיאה:`, r.error); }
-    if ((i + 1) % 5 === 0) showToast(`⏳ ${i+1}/${total} עובדים...`, 'info', 1500);
-    setTimeout(() => processUser(i + 1), 400);
-  };
-  processUser(0);
-}
-
 async function ensureFirebaseAuth() {
   // Always ensure firebase-app is loaded first
   if (!window.firebase) {
@@ -4284,16 +4205,46 @@ async function createFirebaseAuthUser(email, password) {
     let secondaryApp;
     try { secondaryApp = firebase.app('dazura-secondary'); }
     catch(e) { secondaryApp = firebase.initializeApp(FIREBASE_CONFIG, 'dazura-secondary'); }
-    const secondaryAuth = secondaryApp.auth();
-    const safePass = password.length >= 6 ? password : password.padEnd(6, '1');
-    const cred = await secondaryAuth.createUserWithEmailAndPassword(email, safePass);
-    const uid = cred.user.uid;
-    await secondaryAuth.signOut();
-    return { success: true, uid };
+    const safePass = (password || '').length >= 6 ? password : (password || '').padEnd(6, '1');
+    const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, safePass);
+    await secondaryApp.auth().signOut();
+    return { success: true, uid: cred.user.uid };
   } catch(err) {
     if (err.code === 'auth/email-already-in-use') return { success: true, existing: true };
     return { success: false, error: err.code || err.message };
   }
+}
+
+// ── Migrate all existing users to Firebase Auth (Admin only) ──
+async function migrateExistingUsersToFirebase() {
+  if (currentUser?.role !== 'admin') { showToast('רק Admin', 'warning'); return; }
+  const db = getDB();
+  const users = Object.values(db.users);
+  const tempPass = (getSettings().tempPassword || 'Welcome1').padEnd(6,'1');
+  let done=0, skip=0, fail=0;
+  showToast(`⏳ מעביר ${users.length} עובדים ל-Firebase Auth...`, 'info', 8000);
+  const next = async (i) => {
+    if (i >= users.length) {
+      showToast(`✅ הועברו ${done} | קיימים ${skip} | שגיאות ${fail}`, fail>0?'warning':'success', 8000);
+      pushToFirebase();
+      return;
+    }
+    const u = users[i];
+    const fbEmail = u.firebaseEmail || u.email || (u.username + '@dazura-hr.app');
+    const r = await createFirebaseAuthUser(fbEmail, tempPass);
+    const db2 = getDB();
+    if (r.success) {
+      if (db2.users[u.username]) {
+        if (!db2.users[u.username].email) db2.users[u.username].email = fbEmail;
+        db2.users[u.username].firebaseEmail = fbEmail;
+        db2.users[u.username].mustChangePassword = true;
+        _saveDBLocal(db2);
+      }
+      r.existing ? skip++ : done++;
+    } else { fail++; console.warn('migrate fail:', u.username, r.error); }
+    setTimeout(() => next(i+1), 400);
+  };
+  next(0);
 }
 
 // ============================================================
@@ -4523,37 +4474,9 @@ function applyBulkImport() {
     added   ? `✅ נוספו ${added} עובדים`   : '',
     updated ? `🔄 עודכנו ${updated} עובדים` : ''
   ].filter(Boolean).join(' | ');
-  showToast(msg + (added ? ` — סיסמה זמנית: "${tempPass}"` : ''), 'success', 8000);
+  showToast(msg + (added ? ` — סיסמה: "${tempPass}"` : ''), 'success', 8000);
   auditLog('bulk_import', `${added} נוספו, ${updated} עודכנו — סיסמה: ${tempPass}`);
   renderAdmin();
-
-  // Create Firebase Auth accounts for new employees (background)
-  if (added > 0) {
-    const newUsers = _bulkImportData.filter(p => !p.isUpdate);
-    let authCreated = 0, authFailed = 0;
-    const safePassBulk = tempPass.length >= 6 ? tempPass : tempPass.padEnd(6, '1');
-    const createNext = async (i) => {
-      if (i >= newUsers.length) {
-        if (authFailed > 0) showToast(`⚠️ ${authFailed} חשבונות Firebase לא נוצרו`, 'warning', 5000);
-        else showToast(`🔐 ${authCreated} חשבונות Firebase Auth נוצרו`, 'success', 4000);
-        return;
-      }
-      const p = newUsers[i];
-      const firebaseEmail = p.email || (p.username + '@dazura-hr.app');
-      const r = await createFirebaseAuthUser(firebaseEmail, safePassBulk);
-      if (r.success) {
-        authCreated++;
-        const db2 = getDB();
-        if (db2.users[p.username]) {
-          if (!db2.users[p.username].email) db2.users[p.username].email = firebaseEmail;
-          db2.users[p.username].firebaseEmail = firebaseEmail;
-          _saveDBLocal(db2);
-        }
-      } else { authFailed++; console.warn('Firebase Auth failed for', p.username, ':', r.error); }
-      setTimeout(() => createNext(i + 1), 350);
-    };
-    setTimeout(() => createNext(0), 1000);
-  }
   _bulkImportData = [];
 }
 
@@ -4667,7 +4590,6 @@ async function doForcePasswordChange() {
   const pass2 = document.getElementById('forcePassNew2').value;
   const errEl = document.getElementById('forcePassError');
   errEl.style.display = 'none';
-
   if (pass.length < 6) {
     errEl.textContent = 'הסיסמה חייבת להיות לפחות 6 תווים';
     errEl.style.display = 'block'; return;
@@ -4676,29 +4598,22 @@ async function doForcePasswordChange() {
     errEl.textContent = 'הסיסמאות אינן תואמות';
     errEl.style.display = 'block'; return;
   }
-
   const db = getDB();
   db.users[currentUser.username].password = hashPass(pass);
   db.users[currentUser.username].mustChangePassword = false;
   saveDB(db);
-
   const savedUsername = currentUser.username;
-  const userEmail = currentUser.email || currentUser.firebaseEmail || '';
-
-  // Update Firebase Auth password
-  if (userEmail) {
-    try {
-      const auth = await ensureFirebaseAuth();
-      const fbUser = auth.currentUser;
-      if (fbUser) await fbUser.updatePassword(pass);
-    } catch(e) { console.warn('Firebase password update:', e.message); }
-  }
-
+  const fbEmail = currentUser.firebaseEmail || currentUser.email || '';
+  try {
+    const auth = await ensureFirebaseAuth();
+    const fbUser = auth.currentUser;
+    if (fbUser) await fbUser.updatePassword(pass);
+  } catch(e) { console.warn('Firebase pw update:', e.message); }
   auditLog('force_pass_change', `${savedUsername} הגדיר סיסמה אישית`);
   pushToFirebase();
   currentUser = null;
   document.getElementById('forcePasswordScreen').classList.remove('active');
-  showToast('✅ סיסמה הוגדרה בהצלחה! כעת התחבר.', 'success');
+  showToast('✅ סיסמה הוגדרה! כעת התחבר.', 'success');
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginUsername').value = savedUsername;
   document.getElementById('loginPassword').value = '';
@@ -5077,7 +4992,6 @@ function showModuleSelector() {
   setTimeout(checkBirthdays, 600);
   setTimeout(checkHandoverNeeded, 1500);
   setTimeout(checkPendingHandovers, 2500);
-  setTimeout(updateHandoverBadge, 2600);
 }
 
 // Open AI panel from module selector
@@ -5724,13 +5638,7 @@ function startRealtimeListener() {
   _fbUnsubscribe = firebaseDB.collection('vacationSystem').doc('data')
     .onSnapshot(doc => {
       if (!doc.exists) {
-        if (currentUser) { setTimeout(() => pushToFirebase(), 500); }
-        else {
-          ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen','forcePasswordScreen','pendingApprovalScreen'].forEach(id => {
-            document.getElementById(id)?.classList.remove('active');
-          });
-          document.getElementById('loginScreen').classList.add('active');
-        }
+        if (currentUser) setTimeout(() => pushToFirebase(), 800);
         return;
       }
       const data = doc.data();
@@ -5831,8 +5739,6 @@ async function resetFirebase() {
   if (!firebaseConnected || !firebaseDB) { showToast('⚠️ לא מחובר ל-Firebase', 'warning'); return; }
   if (!confirm('⚠️ איפוס Firebase\n\nימחק את כל הנתונים בענן ויסנכרן מחדש מהנתונים המקומיים.\n\nלהמשיך?')) return;
   try {
-    closeModal('firebaseModal');
-    showToast('⏳ מאפס ומסנכרן...', 'info', 3000);
     await firebaseDB.collection('vacationSystem').doc('data').delete();
     await pushToFirebase();
     showToast('✅ Firebase אופס ומסונכרן מחדש', 'success');
@@ -6359,23 +6265,23 @@ window.addEventListener('load', function() {
     setTimeout(() => {
       splash.style.display = 'none';
       if(splash.parentNode) splash.remove();
-      // Safety net: ensure login screen is visible
-      const loginScreen = document.getElementById('loginScreen');
+      // ensure login visible
+      const ls = document.getElementById('loginScreen');
       const anyActive = ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen']
         .some(id => document.getElementById(id)?.classList.contains('active'));
-      if (loginScreen && !anyActive) loginScreen.classList.add('active');
+      if (ls && !anyActive) ls.classList.add('active');
     }, 700);
   }, duration);
 
-  // Hard timeout: if Firebase hangs > 8s — show login anyway
+  // Hard timeout — in case Firebase hangs
   setTimeout(() => {
-    const s = document.getElementById('dazura-splash');
-    if (s) { s.style.display = 'none'; if (s.parentNode) s.remove(); }
-    const loginScreen = document.getElementById('loginScreen');
+    const sp = document.getElementById('dazura-splash');
+    if (sp) { sp.style.display='none'; if(sp.parentNode) sp.remove(); }
+    const ls = document.getElementById('loginScreen');
     const anyActive = ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen']
       .some(id => document.getElementById(id)?.classList.contains('active'));
-    if (loginScreen && !anyActive) loginScreen.classList.add('active');
-  }, Math.max(duration + 2000, 8000));
+    if (ls && !anyActive) ls.classList.add('active');
+  }, Math.max(duration+2000, 8000));
 });
 
 
@@ -6533,7 +6439,6 @@ function renderHandoverList() {
   const db = getDB();
   const handovers = db.handovers || {};
   const today = new Date().toISOString().split('T')[0];
-  console.log('[Handover] DB has', Object.keys(handovers).length, 'protocols. User:', currentUser?.username, 'role:', currentUser?.role);
 
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'accountant';
   const isManager = currentUser.role === 'manager' || isUserDeptManager(currentUser.username);
@@ -6547,10 +6452,9 @@ function renderHandoverList() {
   })();
 
   const list = Object.values(handovers).filter(h => {
-    if (isAdmin) return true; // admin sees all
-    // Manager sees: explicitly assigned to them, OR employee in their dept, OR no manager set
+    if (isAdmin) return true;
     if (h.managerUsername === currentUser.username) return true;
-    if (!h.managerUsername && isManager) return true; // no manager set — show to all managers
+    if (!h.managerUsername && isManager) return true;
     if (isManager && myDepts.length > 0) {
       const empUser = db.users[h.user];
       if (empUser) {
@@ -6558,28 +6462,27 @@ function renderHandoverList() {
         return empDepts.some(d => myDepts.includes(d));
       }
     }
-    // role=manager with no dept assignment — see all handovers
     if (currentUser.role === 'manager') return true;
     return false;
   }).sort((a, b) => a.date.localeCompare(b.date));
 
-  // Auto-mark as seen when manager opens the list
+  // Auto-mark as seen
   let changed = false;
   list.forEach(h => {
-    if (!h.seenByManager && (h.managerUsername === currentUser.username || isAdmin)) {
-      const key = h.user + '_' + h.date;
-      if (db.handovers[key]) { db.handovers[key].seenByManager = true; changed = true; }
+    if (!h.seenByManager && (h.managerUsername===currentUser.username||isAdmin)) {
+      const k = h.user+'_'+h.date;
+      if (db.handovers[k]) { db.handovers[k].seenByManager=true; changed=true; }
     }
   });
   if (changed) saveDB(db);
 
-  // Update section title with count
+  // Badge on section title
   const titleEl = document.querySelector('#handoverSection .section-title');
   if (titleEl) {
-    const unread = list.filter(h => !h.seenByManager).length;
+    const unread = list.filter(h=>!h.seenByManager).length;
     titleEl.innerHTML = '<span class="section-title-icon">📋</span> פרוטוקולי העברת מקל'
       + (list.length ? ` <span style="background:var(--primary);color:#fff;border-radius:10px;font-size:11px;padding:2px 8px;margin-right:6px;">${list.length}</span>` : '')
-      + (unread ? ` <span style="background:#e53935;color:#fff;border-radius:10px;font-size:11px;padding:2px 8px;">חדש</span>` : '');
+      + (unread ? ` <span style="background:#e53935;color:#fff;border-radius:10px;font-size:11px;padding:2px 7px;">חדש</span>` : '');
   }
 
   if (!list.length) {
@@ -6588,16 +6491,16 @@ function renderHandoverList() {
   }
 
   el.innerHTML = list.map(h => {
-    const dateHeb = new Date(h.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
+    const dateHeb = new Date(h.date+'T12:00:00').toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'});
     const isPast = h.date < today;
     const seen = h.seenByManager ? '<span style="color:var(--success);font-size:11px;">✅ נקרא</span>' : '<span style="color:var(--warning);font-size:11px;">🔔 חדש</span>';
     const pastTag = isPast ? '<span style="color:var(--text-muted);font-size:11px;">• עבר</span>' : '';
-    const tasks = h.tasks.map((t,i) => `<div style="font-size:13px;color:var(--text-secondary);padding:3px 0;">${i+1}. ${t}</div>`).join('');
+    const tasks = h.tasks.map((t,i)=>`<div style="font-size:13px;color:var(--text-secondary);padding:3px 0;">${i+1}. ${t}</div>`).join('');
     const contact = h.contact ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📞 מחליף/ה: ${h.contact}</div>` : '';
-    const key = h.user + '_' + h.date;
-    const encKey = encodeURIComponent(key);
+    const key = h.user+'_'+h.date;
+    const enc = encodeURIComponent(key);
     return `
-      <div style="background:var(--surface2);border-radius:14px;padding:16px;margin-bottom:10px;border-right:4px solid ${isPast ? 'var(--border-strong)' : 'var(--primary)'};opacity:${isPast ? 0.6 : 1}">
+      <div style="background:var(--surface2);border-radius:14px;padding:16px;margin-bottom:10px;border-right:4px solid ${isPast?'var(--border-strong)':'var(--primary)'};opacity:${isPast?0.6:1}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
           <div>
             <div style="font-weight:800;font-size:15px;">👤 ${h.fullName}</div>
@@ -6605,7 +6508,7 @@ function renderHandoverList() {
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             ${seen}
-            <button onclick="exportHandoverPDF('${encKey}')" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;" title="ייצא PDF">📄</button>
+            <button onclick="exportHandoverPDF('${enc}')" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;" title="PDF">📄</button>
             <button onclick="deleteHandover('${key}')" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--danger);padding:4px;" title="מחק">🗑️</button>
           </div>
         </div>
@@ -6617,71 +6520,62 @@ function renderHandoverList() {
 function exportHandoverPDF(encodedKey) {
   const key = decodeURIComponent(encodedKey);
   const db = getDB();
-  const h = db.handovers && db.handovers[key];
-  if (!h) { showToast('פרוטוקול לא נמצא', 'warning'); return; }
-  const dateHeb = new Date(h.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  const companyName = (db.settings && db.settings.companyName) || 'Dazura HR';
-  const createdHeb = new Date(h.createdAt).toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  const tasksHTML = h.tasks.map((t,i) =>
-    `<tr><td style="padding:10px 14px;border-bottom:1px solid #eee;color:#555;width:36px;font-weight:600;">${i+1}</td>
-     <td style="padding:10px 14px;border-bottom:1px solid #eee;">${t}</td></tr>`
-  ).join('');
-  const managerUser = h.managerUsername ? (db.users[h.managerUsername] || null) : null;
+  const h = db.handovers?.[key];
+  if (!h) { showToast('פרוטוקול לא נמצא','warning'); return; }
+  const dateHeb = new Date(h.date+'T12:00:00').toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const companyName = (db.settings?.companyName) || 'Dazura HR';
+  const createdHeb = new Date(h.createdAt).toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const tasksHTML = h.tasks.map((t,i)=>`<tr><td style="padding:10px 14px;border-bottom:1px solid #eee;color:#555;width:36px;font-weight:600;">${i+1}</td><td style="padding:10px 14px;border-bottom:1px solid #eee;">${t}</td></tr>`).join('');
+  const managerUser = h.managerUsername ? (db.users[h.managerUsername]||null) : null;
   const managerName = managerUser ? managerUser.fullName : '—';
-  const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
-<title>פרוטוקול העברת מקל — ${h.fullName}</title>
-<style>*{box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;direction:rtl;margin:0;padding:40px;color:#222;background:#fff;}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:18px;border-bottom:3px solid #6C63FF;}
-.company{font-size:22px;font-weight:800;color:#6C63FF;}.doc-title{font-size:13px;color:#888;margin-top:4px;}
-.badge{background:#6C63FF;color:#fff;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;}
-.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;}
-.meta-box{background:#f8f8ff;border-radius:10px;padding:14px 16px;border-right:4px solid #6C63FF;}
-.meta-label{font-size:11px;color:#888;margin-bottom:4px;}.meta-value{font-size:16px;font-weight:700;}
+  const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>פרוטוקול — ${h.fullName}</title>
+<style>*{box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;direction:rtl;margin:0;padding:40px;color:#222;}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:18px;border-bottom:3px solid #6C63FF;}
+.co{font-size:22px;font-weight:800;color:#6C63FF;}.badge{background:#6C63FF;color:#fff;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;}
+.mbox{background:#f8f8ff;border-radius:10px;padding:14px 16px;border-right:4px solid #6C63FF;}
+.ml{font-size:11px;color:#888;margin-bottom:4px;}.mv{font-size:16px;font-weight:700;}
 table{width:100%;border-collapse:collapse;margin-bottom:20px;}th{background:#6C63FF;color:#fff;padding:10px 14px;text-align:right;font-size:14px;}
-.section-title{font-size:15px;font-weight:800;margin:22px 0 10px;color:#333;border-right:4px solid #6C63FF;padding-right:10px;}
-.footer{margin-top:40px;padding-top:16px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:12px;color:#aaa;}
-.sig-line{border-top:1px solid #999;width:180px;margin-top:40px;font-size:12px;color:#666;padding-top:6px;}
+.st{font-size:15px;font-weight:800;margin:22px 0 10px;color:#333;border-right:4px solid #6C63FF;padding-right:10px;}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:12px;color:#aaa;}
+.sig{border-top:1px solid #999;width:180px;margin-top:40px;font-size:12px;color:#666;padding-top:6px;}
 @media print{body{padding:20px;}}</style></head><body>
-<div class="header"><div><div class="company">📋 ${companyName}</div><div class="doc-title">פרוטוקול העברת מקל — מסמך רשמי</div></div><div class="badge">Dazura HR</div></div>
-<div class="meta-grid">
-  <div class="meta-box"><div class="meta-label">שם העובד</div><div class="meta-value">👤 ${h.fullName}</div></div>
-  <div class="meta-box"><div class="meta-label">תאריך חופשה</div><div class="meta-value">📅 ${dateHeb}</div></div>
-  <div class="meta-box"><div class="meta-label">מנהל ממונה</div><div class="meta-value">👔 ${managerName}</div></div>
-  <div class="meta-box"><div class="meta-label">הוגש בתאריך</div><div class="meta-value">🕐 ${createdHeb}</div></div>
+<div class="hdr"><div><div class="co">📋 ${companyName}</div><div style="font-size:13px;color:#888;">פרוטוקול העברת מקל</div></div><div class="badge">Dazura HR</div></div>
+<div class="meta">
+<div class="mbox"><div class="ml">שם העובד</div><div class="mv">👤 ${h.fullName}</div></div>
+<div class="mbox"><div class="ml">תאריך חופשה</div><div class="mv">📅 ${dateHeb}</div></div>
+<div class="mbox"><div class="ml">מנהל ממונה</div><div class="mv">👔 ${managerName}</div></div>
+<div class="mbox"><div class="ml">הוגש</div><div class="mv">🕐 ${createdHeb}</div></div>
 </div>
-${h.contact ? `<div class="section-title">פרטי מחליף/ה</div><p style="font-size:14px;background:#fff8e1;padding:10px 14px;border-radius:8px;">📞 ${h.contact}</p>` : ''}
-<div class="section-title">משימות לטיפול</div>
+${h.contact?`<div class="st">מחליף/ה</div><p style="font-size:14px;background:#fff8e1;padding:10px 14px;border-radius:8px;">📞 ${h.contact}</p>`:''}
+<div class="st">משימות לטיפול</div>
 <table><thead><tr><th style="width:40px;">#</th><th>תיאור המשימה</th></tr></thead><tbody>${tasksHTML}</tbody></table>
 <div style="display:flex;justify-content:space-between;margin-top:50px;">
-  <div class="sig-line">חתימת העובד</div><div class="sig-line">חתימת המנהל</div>
-</div>
-<div class="footer"><span>Dazura HR System — מסמך זה הופק אוטומטית</span><span>הופק: ${new Date().toLocaleDateString('he-IL')}</span></div>
+<div class="sig">חתימת העובד</div><div class="sig">חתימת המנהל</div></div>
+<div class="foot"><span>Dazura HR — מסמך אוטומטי</span><span>הופק: ${new Date().toLocaleDateString('he-IL')}</span></div>
 </body></html>`;
-  const win = window.open('', '_blank');
-  if (!win) { showToast('אפשר הוצאת חלונות קופצים בדפדפן', 'warning'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); }, 600);
+  const win = window.open('','_blank');
+  if (!win) { showToast('אפשר חלונות קופצים בדפדפן','warning'); return; }
+  win.document.write(html); win.document.close(); win.focus();
+  setTimeout(()=>win.print(), 600);
 }
 
 function updateHandoverBadge() {
+  if (!currentUser) return;
   const db = getDB();
-  if (!db.handovers || !currentUser) return;
   const today = new Date().toISOString().split('T')[0];
-  const unseen = Object.values(db.handovers).filter(h =>
-    h.managerUsername === currentUser.username && !h.seenByManager && h.date >= today
+  const unseen = Object.values(db.handovers||{}).filter(h=>
+    h.managerUsername===currentUser.username && !h.seenByManager && h.date>=today
   ).length;
-  const tabBtn = document.querySelector('[data-tab="manager"]');
+  const tabBtn = document.querySelector('[data-tab="manager"]') || document.querySelector('.tab-btn[onclick*="manager"]');
   if (!tabBtn) return;
-  const existing = tabBtn.querySelector('.handover-badge');
-  if (existing) existing.remove();
-  if (unseen > 0) {
-    const badge = document.createElement('span');
-    badge.className = 'handover-badge';
-    badge.textContent = unseen;
-    badge.style.cssText = 'background:#e53935;color:#fff;border-radius:50%;font-size:10px;font-weight:700;padding:1px 5px;margin-right:5px;vertical-align:middle;';
-    tabBtn.prepend(badge);
+  tabBtn.querySelectorAll('.hov-badge').forEach(b=>b.remove());
+  if (unseen>0) {
+    const b = document.createElement('span');
+    b.className='hov-badge';
+    b.textContent=unseen;
+    b.style.cssText='background:#e53935;color:#fff;border-radius:50%;font-size:10px;font-weight:700;padding:1px 5px;margin-right:5px;vertical-align:middle;';
+    tabBtn.prepend(b);
   }
 }
 
