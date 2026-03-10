@@ -925,6 +925,20 @@
           <div id="managerPendingList"></div>
         </div>
 
+        <!-- Handover Protocols -->
+        <div class="admin-section" id="handoverSection">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div class="section-title" style="margin-bottom:0;" id="handoverSectionTitle">
+              <span class="section-title-icon">📋</span> פרוטוקולי העברת מקל
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline" style="font-size:12px;" onclick="clearAllHandovers()">🗑️ נקה הכל</button>
+              <button class="btn btn-outline" style="font-size:12px;" onclick="exportHandoversExcel()">📤 ייצוא</button>
+            </div>
+          </div>
+          <div id="handoverList"></div>
+        </div>
+
         <!-- Upcoming vacations (team view) -->
         <div class="admin-section">
           <div class="section-title"><span class="section-title-icon">🗓️</span> חופשות קרובות — כל הצוות</div>
