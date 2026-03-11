@@ -270,12 +270,7 @@ body {
 #loginScreen .form-input::placeholder { color: rgba(255,255,255,0.3) !important; }
 #loginScreen .form-label { color: rgba(255,255,255,0.7) !important; }
 #loginScreen .login-first-time { color: rgba(255,255,255,0.45); }
-#loginScreen .link-btn { color: #63a2ff; }
-
-.login-logo {
-  text-align: center;
-  margin-bottom: 28px;
-}
+#loginScreen .link-btn { color: 
 .login-logo-icon {
   width: 84px; height: 84px;
   background: linear-gradient(145deg, rgba(26,86,232,0.6), rgba(15,61,181,0.8));
@@ -1125,13 +1120,6 @@ tbody tr:hover { background: var(--surface2); }
 /* ============================================================
    QUOTA UPLOAD
    ============================================================ */
-.quota-upload-form {
-  background: linear-gradient(135deg, var(--primary-light), var(--primary-mid));
-  border-radius: var(--radius-lg);
-  padding: 22px;
-  border: 2px dashed rgba(37,99,235,0.30);
-  margin-bottom: 20px;
-}
 
 /* ============================================================
    THEME PICKER
@@ -1246,7 +1234,6 @@ tbody tr:hover { background: var(--surface2); }
    ============================================================ */
 .password-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 .flip-rtl { transform: scaleX(-1); }
-.register-form { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
 
 .reset-pass-btn {
   background: var(--warning-light); color: #92400e;
@@ -1549,8 +1536,8 @@ tbody tr:hover { background: var(--surface2); }
 .ms-module-btn:active { transform: translateY(0) scale(0.98); }
 .ms-module-btn.primary-btn { background: linear-gradient(135deg, #1a56e8, #0f3db5); border-color: rgba(37,99,235,0.55); box-shadow: 0 6px 28px rgba(26,86,232,0.35); }
 .ms-module-btn.primary-btn:hover { box-shadow: 0 14px 48px rgba(26,86,232,0.55); }
-.ms-module-btn.danger-btn { background: linear-gradient(135deg, rgba(239,68,68,0.22), rgba(185,28,28,0.22)); border-color: rgba(239,68,68,0.3); }
-.ms-module-btn.danger-btn:hover { background: linear-gradient(135deg, rgba(239,68,68,0.38), rgba(185,28,28,0.38)); border-color: rgba(239,68,68,0.55); box-shadow: 0 14px 40px rgba(239,68,68,0.2); }
+.ms-module-btn
+.ms-module-btn
 .ms-btn-icon { font-size: 28px; flex-shrink: 0; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4)); }
 .ms-btn-title { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 2px; line-height: 1.2; }
 .ms-btn-sub { font-size: 11px; color: rgba(255,255,255,0.55); font-weight: 500; }
@@ -1717,7 +1704,7 @@ tbody tr:hover { background: var(--surface2); }
 
   /* === Hide desktop-only === */
   .tabs         { display: none !important; }
-  .theme-picker { display: none !important; }
+  
 
   /* === App shell === */
   .app-screen {
@@ -2047,15 +2034,7 @@ tbody tr:hover { background: var(--surface2); }
   font-size: 52px;
   font-weight: 900;
   letter-spacing: 6px;
-  background: linear-gradient(135deg, #fff 0%, #a8d8ff 50%, #63a2ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 8px;
-  animation: logoGlow 2s ease-in-out infinite alternate;
-}
-@keyframes logoGlow {
-  from { filter: drop-shadow(0 0 8px rgba(99,162,255,0.3)); }
+  background: linear-gradient(135deg, #fff 0%, #a8d8ff 50%, 
   to   { filter: drop-shadow(0 0 20px rgba(99,162,255,0.7)); }
 }
 
@@ -2104,16 +2083,7 @@ tbody tr:hover { background: var(--surface2); }
 .dazura-stat-num {
   font-size: 32px;
   font-weight: 900;
-  color: #63a2ff;
-  line-height: 1;
-  text-shadow: 0 0 20px rgba(99,162,255,0.6);
-}
-.dazura-stat-label {
-  font-size: 12px;
-  color: rgba(255,255,255,0.5);
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
+  color: 
 
 /* Progress bar */
 .splash-progress {
@@ -2129,12 +2099,7 @@ tbody tr:hover { background: var(--surface2); }
 .splash-progress-bar {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #63a2ff, #a8d8ff);
-  border-radius: 2px;
-  transition: width 0.1s linear;
-  box-shadow: 0 0 8px rgba(99,162,255,0.8);
-}
-@keyframes fadeIn { to { opacity:1; } }
+  background: linear-gradient(90deg,  }
 
 
 /* ============================================================
