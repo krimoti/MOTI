@@ -2114,11 +2114,6 @@ function approveRequest(reqId) {
   showToast(`✅ בקשת ${req.fullName} אושרה`,'success');
   renderManagerDashboard();
   updateApprovalStatusBadge();
-  // אם העובד מחובר עכשיו (אותו מכשיר) — אפס throttle ופתח פופאפ
-  if (currentUser && currentUser.username === req.username) {
-    _handoverCheckTs = 0;
-    setTimeout(checkHandoverNeeded, 800);
-  }
 }
 
 function rejectRequestPrompt(reqId) {
@@ -3652,21 +3647,17 @@ function sendCeoMessage() {
 }
 
 // ===== HANDOVER PROTOCOL =====
-let _handoverCheckTs = 0;
 let _lastKnownPending = null;
+let _handoverPopupOpen = false;
+
 function checkHandoverNeeded() {
   if (!currentUser) return;
-  if (currentUser.role === 'manager' || currentUser.role === 'admin') return;
+  if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'accountant') return;
+  if (_handoverPopupOpen) return; // כבר פתוח — לא לפתוח שוב
+
   const db = getDB();
-
   const pending = db.handoverPending && db.handoverPending[currentUser.username];
-  // הפופאפ יופיע בכל כניסה כל עוד לא הוגש פרוטוקול
   if (!pending || pending.submitted) return;
-
-  // throttle — לא יותר מפעם אחת כל 8 שניות
-  const now = Date.now();
-  if (now - _handoverCheckTs < 8000) return;
-  _handoverCheckTs = now;
 
   // עדכן הודעת הפופאפ לפי תאריך החופשה האמיתי
   const msgEl = document.getElementById('handoverAlertMsg');
@@ -3675,9 +3666,39 @@ function checkHandoverNeeded() {
     msgEl.textContent = `⏰ החופשה שלך (${dateHeb}) אושרה! לפני שתצא — שתף את הצוות במה שחשוב.`;
   }
 
-  // לא מסמנים popupShown=true — הפופאפ יחזור בכל כניסה עד שהעובד ישלח
-  const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
-  setTimeout(() => openModal('handoverModal'), delay);
+  _handoverPopupOpen = true;
+  const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 1800 : 900;
+  setTimeout(() => {
+    openModal('handoverModal');
+    // כשהפופאפ נסגר — אפס את הדגל
+    const overlay = document.getElementById('handoverModal');
+    if (overlay) {
+      const onClose = () => {
+        _handoverPopupOpen = false;
+        overlay.removeEventListener('transitionend', onClose);
+      };
+      overlay.addEventListener('transitionend', onClose);
+    }
+  }, delay);
+}
+
+// פולר — בודק כל 6 שניות אם הגיע handoverPending חדש (לאחר אישור מנהל)
+let _handoverPollInterval = null;
+function startHandoverPoller() {
+  if (_handoverPollInterval) clearInterval(_handoverPollInterval);
+  _handoverPollInterval = setInterval(() => {
+    if (!currentUser || currentUser.role === 'manager' || currentUser.role === 'admin') return;
+    const db = getDB();
+    const pending = db.handoverPending?.[currentUser.username];
+    if (!pending || pending.submitted) return;
+    // אם הגיע pending חדש שעוד לא הוצג — פתח פופאפ
+    const prevAt = _lastKnownPending?.approvedAt;
+    if (pending.approvedAt !== prevAt) {
+      _lastKnownPending = pending;
+      _handoverPopupOpen = false; // אפס כדי לאפשר פתיחה
+      checkHandoverNeeded();
+    }
+  }, 6000);
 }
 
 function saveHandover() {
@@ -4934,7 +4955,8 @@ function showModuleSelector() {
   setTimeout(checkBirthdays, 600);
   setTimeout(checkHandoverNeeded, 1500);
   setTimeout(checkPendingHandovers, 2500);
-  setTimeout(renderMyHandoverCard, 500); // הצג כפתור פרוטוקול בדוח אישי
+  setTimeout(renderMyHandoverCard, 500);
+  startHandoverPoller(); // פולר — מזהה אישור מנהל גם ללא Firebase
 }
 
 // Open AI panel from module selector
@@ -5618,14 +5640,14 @@ function startRealtimeListener() {
         const newPending = cloudDB.handoverPending?.[currentUser.username];
         const prevAt     = _lastKnownPending?.approvedAt;
         const newAt      = newPending?.approvedAt;
-        // אם הגיע pending חדש שלא הוגש — אפס throttle ופתח פופאפ מיד
+        // אם הגיע pending חדש שלא הוגש — פתח פופאפ מיד
         if (newPending && !newPending.submitted && newAt !== prevAt) {
-          _handoverCheckTs = 0;
-          setTimeout(checkHandoverNeeded, 1000); // delay לאחר עדכון ה-DOM
+          _lastKnownPending = newPending;
+          _handoverPopupOpen = false;
+          setTimeout(checkHandoverNeeded, 800);
         } else {
           checkHandoverNeeded();
         }
-        _lastKnownPending = newPending || null;
         renderMyHandoverCard();
       }
       // Silent sync — no toast notification needed
