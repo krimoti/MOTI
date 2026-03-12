@@ -2093,13 +2093,22 @@ function approveRequest(reqId) {
   req.approvedAt=new Date().toISOString();
   if(!db.vacations[req.username])db.vacations[req.username]={};
   (req.dates||[]).forEach(dt=>{db.vacations[req.username][dt]=req.type||'full';});
+
+  // ── סמן שפרוטוקול נדרש לעובד זה (יוצג בכניסה הבאה / מיד אם הוא online) ──
+  if (!db.handoverPending) db.handoverPending = {};
+  db.handoverPending[req.username] = {
+    reqId,
+    dates: req.dates || [],
+    firstDate: (req.dates||[]).sort()[0] || '',
+    approvedAt: new Date().toISOString(),
+    shown: false  // האם הפופאפ כבר הוצג לעובד
+  };
+
   saveDB(db);
   auditLog('approval_approved',`אושרה בקשת ${req.fullName} — ${req.dates?.length||0} ימים`);
   showToast(`✅ בקשת ${req.fullName} אושרה`,'success');
-  // אפס session storage של פרוטוקול עבור כל תאריכי החופשה שאושרו
-  (req.dates||[]).forEach(dt => { sessionStorage.removeItem('handoverShown_' + dt); });
   renderManagerDashboard();
-  updateApprovalStatusBadge(); // update badge if employee is also viewing calendar
+  updateApprovalStatusBadge();
 }
 
 function rejectRequestPrompt(reqId) {
@@ -3639,33 +3648,14 @@ function checkHandoverNeeded() {
   if (!currentUser) return;
   if (currentUser.role === 'manager' || currentUser.role === 'admin') return;
   const db = getDB();
-  const vacs = getVacations(currentUser.username);
 
-  // בדיקה ל-7 ימים קדימה — מחפש את יום החופשה הראשון הקרוב
-  for (let i = 1; i <= 7; i++) {
-    const d = new Date(); d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
-    const type = vacs[dateStr];
-    if (type === 'full' || type === 'half') {
-      // בדיקה: האם כבר הוגש פרוטוקול לתאריך זה בעבר?
-      // משתמשים ב-localStorage (לא sessionStorage) כדי לשמור גם אחרי רענון/מחיקה ע"י מנהל
-      const submittedKey = 'handoverSubmitted_' + currentUser.username + '_' + dateStr;
-      if (localStorage.getItem(submittedKey)) return; // הוגש — לא מציגים שוב
+  // בדוק אם יש פרוטוקול ממתין לעובד זה (נוצר ע"י אישור מנהל)
+  const pending = db.handoverPending && db.handoverPending[currentUser.username];
+  if (!pending) return;
+  if (pending.shown) return; // כבר הוצג — לא מציגים שוב
 
-      const storageKey = 'handoverShown_' + dateStr;
-      if (!sessionStorage.getItem(storageKey)) {
-        sessionStorage.setItem(storageKey, '1');
-        const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
-        setTimeout(() => openModal('handoverModal'), delay);
-      }
-      return;
-    }
-  }
-}
-
-// איפוס sessionStorage לפרוטוקול — נקרא כשבקשה מאושרת
-function resetHandoverSession(dateStr) {
-  if (dateStr) sessionStorage.removeItem('handoverShown_' + dateStr);
+  const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
+  setTimeout(() => openModal('handoverModal'), delay);
 }
 
 function saveHandover() {
@@ -3688,37 +3678,34 @@ function saveHandover() {
   const managerName = managerUser?.fullName || 'המנהל';
   const managerEmail = managerUser?.email || '';
 
-  db.handovers[currentUser.username + '_' + tomorrowStr] = {
+  // ── קבע תאריך ראשון של החופשה מה-handoverPending (לא בהכרח מחר) ──
+  const pendingData = db.handoverPending && db.handoverPending[currentUser.username];
+  const vacStartDate = pendingData?.firstDate || tomorrowStr;
+
+  const handoverRecord = {
     user: currentUser.username, fullName: currentUser.fullName,
-    date: tomorrowStr, tasks, contact,
+    date: vacStartDate, dates: pendingData?.dates || [vacStartDate],
+    tasks, contact,
     managerUsername, seenByManager: false,
     createdAt: new Date().toISOString()
   };
-  saveDB(db);
-  // סמן ב-localStorage שהפרוטוקול הוגש — לא יוצג שוב גם אם המנהל מחק
-  localStorage.setItem('handoverSubmitted_' + currentUser.username + '_' + tomorrowStr, '1');
-  closeModal('handoverModal');
-  auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
 
-  // ── Build mailto ──
-  const subject = encodeURIComponent(`📋 פרוטוקול העברת מקל — ${currentUser.fullName} (${dateHeb})`);
-  let body = `שלום ${managerName},\n\n`;
-  body += `${currentUser.fullName} יצא/ת לחופשה ביום ${dateHeb}.\n`;
-  body += `להלן המשימות הדורשות טיפול:\n\n`;
-  tasks.forEach((t, i) => { body += `${i+1}. ${t}\n`; });
-  if (contact) body += `\nמחליף/ה: ${contact}\n`;
-  body += `\nהפרוטוקול נשמר במערכת Dazura.\n\nבברכה,\n${currentUser.fullName}`;
+  // שמור את הפרוטוקול הפעיל (למנהל)
+  db.handovers[currentUser.username + '_' + vacStartDate] = handoverRecord;
 
-  const mailto = `mailto:${managerEmail}?subject=${subject}&body=${encodeURIComponent(body)}`;
+  // שמור archived copy — לא נמחק לעולם, משמש את ה-AI
+  if (!db.handoversArchive) db.handoversArchive = {};
+  db.handoversArchive[currentUser.username + '_' + vacStartDate] = { ...handoverRecord, archivedAt: new Date().toISOString() };
 
-  if (managerEmail) {
-    // Open mail app
-    window.location.href = mailto;
-    showToast(`✅ פרוטוקול נשמר — נפתח מייל ל-${managerName}`, 'success');
-  } else {
-    // No email on file — show toast with fallback
-    showToast(`✅ פרוטוקול נשמר — למנהל אין מייל במערכת, ${managerName} יראה בכניסה הבאה`, 'warning');
+  // סמן שהפופאפ כבר הוצג ולא יחזור
+  if (db.handoverPending && db.handoverPending[currentUser.username]) {
+    db.handoverPending[currentUser.username].shown = true;
   }
+
+  saveDB(db);
+  closeModal('handoverModal');
+  auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${vacStartDate}`);
+  showToast(`✅ פרוטוקול נשמר — ${managerName} יראה בכניסה הבאה`, 'success');
 }
 
 // ── Show pending handovers to manager on login ──────────────────
@@ -5793,6 +5780,17 @@ function doSubmitRequest(note) {
     status: 'pending',
     createdAt: new Date().toISOString()
   });
+
+  // ── בקשה חדשה — אפס את מצב הפרוטוקול כדי שיופיע מחדש לאחר אישור ──
+  if (db.handoverPending && db.handoverPending[currentUser.username]) {
+    delete db.handoverPending[currentUser.username];
+  }
+  // מחק גם את הפרוטוקול הישן שמשויך לתאריכים אלה
+  dates.forEach(dt => {
+    const oldKey = currentUser.username + '_' + dt;
+    if (db.handovers && db.handovers[oldKey]) delete db.handovers[oldKey];
+  });
+
   saveDB(db);
   auditLog('vacation_request', `${currentUser.fullName} הגיש בקשה — ${totalDays} ימים`);
 }
@@ -6496,26 +6494,26 @@ function deleteHandover(key) {
   if (!confirm('למחוק פרוטוקול זה?')) return;
   const db = getDB();
   if (db.handovers && db.handovers[key]) {
+    // מוחק מהתצוגה — אבל ה-archive נשאר לצורך ה-AI
     delete db.handovers[key];
     saveDB(db);
-    showToast('🗑️ פרוטוקול נמחק', 'success');
+    showToast('🗑️ פרוטוקול הוסר מהתצוגה (המידע נשמר למערכת)', 'success');
     renderHandoverList();
   }
 }
 
 function clearAllHandovers() {
-  if (!confirm('למחוק את כל הפרוטוקולים?')) return;
+  if (!confirm('למחוק את כל הפרוטוקולים מהתצוגה?')) return;
   const db = getDB();
-  const today = new Date().toISOString().split('T')[0];
   const isAdmin = currentUser.role === 'admin';
   Object.keys(db.handovers || {}).forEach(key => {
     const h = db.handovers[key];
     if (isAdmin || h.managerUsername === currentUser.username) {
-      delete db.handovers[key];
+      delete db.handovers[key]; // archive נשאר
     }
   });
   saveDB(db);
-  showToast('🗑️ כל הפרוטוקולים נמחקו', 'success');
+  showToast('🗑️ כל הפרוטוקולים הוסרו מהתצוגה', 'success');
   renderHandoverList();
 }
 

@@ -405,11 +405,22 @@ const DazuraAI = (() => {
 
   // WHO IS WHERE — single date
   // ── עזר: מחזיר טקסט פרוטוקול העברת מקל לעובד ותאריך ──
+  // קורא מה-archive (לא נמחק לעולם) כדי להציג גם אם המנהל מחק מהתצוגה
   function getHandoverNote(db, username, dateStr) {
-    if (!db.handovers) return '';
-    // חפש פרוטוקול שמכסה תאריך זה (פרוטוקול נשמר לתאריך הראשון של החופשה)
-    const h = Object.values(db.handovers).find(hv =>
-      hv.user === username && hv.date <= dateStr
+    // מקור 1: archive (נשמר לצמיתות)
+    const archive = db.handoversArchive || {};
+    // מקור 2: handovers פעיל (fallback)
+    const active = db.handovers || {};
+
+    const allRecords = [...Object.values(archive), ...Object.values(active)];
+    // חפש פרוטוקול לאותו עובד שמכסה את תאריך הבדיקה
+    const h = allRecords.find(hv =>
+      hv.user === username &&
+      (
+        hv.date === dateStr ||
+        (Array.isArray(hv.dates) && hv.dates.includes(dateStr)) ||
+        (hv.date <= dateStr && (!hv.dates || hv.dates.length === 0))
+      )
     );
     if (!h) return '';
     const parts = [];
