@@ -2114,6 +2114,11 @@ function approveRequest(reqId) {
   showToast(`✅ בקשת ${req.fullName} אושרה`,'success');
   renderManagerDashboard();
   updateApprovalStatusBadge();
+  // אם העובד מחובר עכשיו (אותו מכשיר) — אפס throttle ופתח פופאפ
+  if (currentUser && currentUser.username === req.username) {
+    _handoverCheckTs = 0;
+    setTimeout(checkHandoverNeeded, 800);
+  }
 }
 
 function rejectRequestPrompt(reqId) {
@@ -3648,6 +3653,7 @@ function sendCeoMessage() {
 
 // ===== HANDOVER PROTOCOL =====
 let _handoverCheckTs = 0;
+let _lastKnownPending = null;
 function checkHandoverNeeded() {
   if (!currentUser) return;
   if (currentUser.role === 'manager' || currentUser.role === 'admin') return;
@@ -5605,7 +5611,23 @@ function startRealtimeListener() {
       _saveDBLocal(cloudDB);
 
       // Refresh current visible tab
-      if (currentUser) refreshCurrentTab();
+      if (currentUser) {
+        refreshCurrentTab();
+        // בדוק אם התווסף handoverPending לעובד הנוכחי מ-Firebase (מנהל אישר)
+        // אפס throttle כדי לאפשר פופאפ מיידי אם יש pending חדש
+        const newPending = cloudDB.handoverPending?.[currentUser.username];
+        const prevAt     = _lastKnownPending?.approvedAt;
+        const newAt      = newPending?.approvedAt;
+        // אם הגיע pending חדש שלא הוגש — אפס throttle ופתח פופאפ מיד
+        if (newPending && !newPending.submitted && newAt !== prevAt) {
+          _handoverCheckTs = 0;
+          setTimeout(checkHandoverNeeded, 1000); // delay לאחר עדכון ה-DOM
+        } else {
+          checkHandoverNeeded();
+        }
+        _lastKnownPending = newPending || null;
+        renderMyHandoverCard();
+      }
       // Silent sync — no toast notification needed
     }, err => {
       console.warn('Listener error:', err.message);
