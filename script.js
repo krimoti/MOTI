@@ -3647,9 +3647,10 @@ function checkHandoverNeeded() {
     const dateStr = d.toISOString().split('T')[0];
     const type = vacs[dateStr];
     if (type === 'full' || type === 'half') {
-      // בדיקה: האם כבר הוגש פרוטוקול לתאריך זה?
-      const alreadySaved = db.handovers && db.handovers[currentUser.username + '_' + dateStr];
-      if (alreadySaved) return; // כבר הגיש — לא מציגים שוב
+      // בדיקה: האם כבר הוגש פרוטוקול לתאריך זה בעבר?
+      // משתמשים ב-localStorage (לא sessionStorage) כדי לשמור גם אחרי רענון/מחיקה ע"י מנהל
+      const submittedKey = 'handoverSubmitted_' + currentUser.username + '_' + dateStr;
+      if (localStorage.getItem(submittedKey)) return; // הוגש — לא מציגים שוב
 
       const storageKey = 'handoverShown_' + dateStr;
       if (!sessionStorage.getItem(storageKey)) {
@@ -3657,7 +3658,7 @@ function checkHandoverNeeded() {
         const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
         setTimeout(() => openModal('handoverModal'), delay);
       }
-      return; // בדיקה רק לחופשה הראשונה הקרובה
+      return;
     }
   }
 }
@@ -3694,6 +3695,8 @@ function saveHandover() {
     createdAt: new Date().toISOString()
   };
   saveDB(db);
+  // סמן ב-localStorage שהפרוטוקול הוגש — לא יוצג שוב גם אם המנהל מחק
+  localStorage.setItem('handoverSubmitted_' + currentUser.username + '_' + tomorrowStr, '1');
   closeModal('handoverModal');
   auditLog('handover', `${currentUser.fullName} הגיש פרוטוקול העברת מקל ל-${tomorrowStr}`);
 
