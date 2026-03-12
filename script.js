@@ -2096,6 +2096,8 @@ function approveRequest(reqId) {
   saveDB(db);
   auditLog('approval_approved',`אושרה בקשת ${req.fullName} — ${req.dates?.length||0} ימים`);
   showToast(`✅ בקשת ${req.fullName} אושרה`,'success');
+  // אפס session storage של פרוטוקול עבור כל תאריכי החופשה שאושרו
+  (req.dates||[]).forEach(dt => { sessionStorage.removeItem('handoverShown_' + dt); });
   renderManagerDashboard();
   updateApprovalStatusBadge(); // update badge if employee is also viewing calendar
 }
@@ -3160,6 +3162,8 @@ function updateApprovalStatusBadge() {
     badge.style.color = '#14532d';
     badge.style.border = '1px solid var(--success)';
     if(btn) btn.style.display = 'none';
+    // ── הפעל פרוטוקול העברת מקל אם יש חופשה מחר ──
+    checkHandoverNeeded();
   } else if(req.status === 'rejected') {
     badge.textContent = `❌ נדחה${req.rejectReason ? ' — ' + req.rejectReason : ''}`;
     badge.style.background = 'var(--danger-light)';
@@ -3633,17 +3637,34 @@ function sendCeoMessage() {
 // ===== HANDOVER PROTOCOL =====
 function checkHandoverNeeded() {
   if (!currentUser) return;
+  if (currentUser.role === 'manager' || currentUser.role === 'admin') return;
   const db = getDB();
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
   const vacs = getVacations(currentUser.username);
-  const type = vacs[tomorrowStr];
-  if ((type === 'full' || type === 'half') && !sessionStorage.getItem('handoverShown_'+tomorrowStr)) {
-    sessionStorage.setItem('handoverShown_'+tomorrowStr, '1');
-    // Longer delay on mobile to ensure screen is fully visible
-    const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
-    setTimeout(() => openModal('handoverModal'), delay);
+
+  // בדיקה ל-7 ימים קדימה — מחפש את יום החופשה הראשון הקרוב
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    const type = vacs[dateStr];
+    if (type === 'full' || type === 'half') {
+      // בדיקה: האם כבר הוגש פרוטוקול לתאריך זה?
+      const alreadySaved = db.handovers && db.handovers[currentUser.username + '_' + dateStr];
+      if (alreadySaved) return; // כבר הגיש — לא מציגים שוב
+
+      const storageKey = 'handoverShown_' + dateStr;
+      if (!sessionStorage.getItem(storageKey)) {
+        sessionStorage.setItem(storageKey, '1');
+        const delay = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 2200 : 1200;
+        setTimeout(() => openModal('handoverModal'), delay);
+      }
+      return; // בדיקה רק לחופשה הראשונה הקרובה
+    }
   }
+}
+
+// איפוס sessionStorage לפרוטוקול — נקרא כשבקשה מאושרת
+function resetHandoverSession(dateStr) {
+  if (dateStr) sessionStorage.removeItem('handoverShown_' + dateStr);
 }
 
 function saveHandover() {
