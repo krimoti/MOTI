@@ -6529,7 +6529,7 @@ function renderMyHandoverCard() {
       return vacDates.slice().sort().pop() >= today;
     });
 
-  // הצג תמיד — אם אין פרוטוקול מציג הודעה מתאימה בפופאפ
+  // כפתור desktop — תמיד גלוי
   btn.style.display = '';
   if (myRecords.length > 0) {
     btn.style.background = 'linear-gradient(135deg,var(--primary),var(--primary-dark))';
@@ -6541,6 +6541,17 @@ function renderMyHandoverCard() {
     btn.style.removeProperty('color');
     btn.style.removeProperty('border');
     btn.style.removeProperty('fontWeight');
+  }
+
+  // כפתור מובייל — מוצג תמיד בתוך bottom-nav
+  const mobileBtn = document.getElementById('myHandoverBtnMobile');
+  if (mobileBtn) {
+    mobileBtn.style.display = '';
+    if (myRecords.length > 0) {
+      mobileBtn.style.color = 'var(--primary)';
+    } else {
+      mobileBtn.style.removeProperty('color');
+    }
   }
 }
 
