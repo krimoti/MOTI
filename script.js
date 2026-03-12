@@ -3738,28 +3738,35 @@ function checkPendingHandovers() {
 }
 
 function showHandoverNotificationModal(html, count) {
-  // Reuse or create a simple notification modal
-  let modal = document.getElementById('handoverNotifModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'handoverNotifModal';
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal" style="max-width:460px;">
-        <div class="modal-title">📋 פרוטוקולי העברת מקל</div>
-        <div id="handoverNotifBody" style="max-height:55vh;overflow-y:auto;"></div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" onclick="closeModal('handoverNotifModal')">✅ הבנתי</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-    // Close on overlay click
-    modal.addEventListener('click', function(e) {
-      if (e.target === this) this.classList.remove('open');
-    });
-  }
-  document.getElementById('handoverNotifBody').innerHTML =
-    `<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">יש לך ${count} פרוטוקול${count>1?'ות':''} ממתין${count>1?'ים':''} לעיון:</div>` + html;
+  // Remove existing if any
+  const existing = document.getElementById('handoverNotifModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'handoverNotifModal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:480px;">
+      <div style="text-align:center;font-size:36px;margin-bottom:8px;">📋</div>
+      <div class="modal-title" style="justify-content:center;text-align:center;">
+        פרוטוקולי העברת מקל
+        <span style="background:var(--primary);color:white;border-radius:20px;padding:2px 10px;font-size:13px;margin-right:8px;">${count}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;text-align:center;">
+        ${count === 1 ? 'עובד אחד שלח פרוטוקול' : count + ' עובדים שלחו פרוטוקולים'} — הפרטים מחכים לך בלוח המנהל
+      </div>
+      <div id="handoverNotifBody" style="max-height:42vh;overflow-y:auto;margin-bottom:4px;"></div>
+      <div class="modal-footer" style="justify-content:center;gap:10px;">
+        <button class="btn btn-outline" onclick="closeModal('handoverNotifModal')">סגור</button>
+        <button class="btn btn-primary" onclick="closeModal('handoverNotifModal');showTab('manager');setTimeout(()=>{ const sec=document.getElementById('handoverSection');if(sec)sec.scrollIntoView({behavior:'smooth'}); },400);">📋 עבור ללוח המנהל →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+
+  document.getElementById('handoverNotifBody').innerHTML = html;
   setTimeout(() => openModal('handoverNotifModal'), 1800);
 }
 
@@ -6367,6 +6374,14 @@ function renderHandoverList() {
     return;
   }
 
+  // Update badge
+  const badge = document.getElementById('handoverBadge');
+  if (badge) {
+    const newCount = list.filter(h => !h.seenByManager).length;
+    if (newCount > 0) { badge.textContent = newCount + ' חדש'; badge.style.display = 'inline'; }
+    else { badge.style.display = 'none'; }
+  }
+
   el.innerHTML = list.map(h => {
     const dateHeb = new Date(h.date).toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
     const isPast = h.date < today;
@@ -6382,8 +6397,9 @@ function renderHandoverList() {
             <div style="font-weight:800;font-size:15px;">👤 ${h.fullName}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">📅 ${dateHeb} ${pastTag}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
             ${seen}
+            <button onclick="printHandoverPDF('${key}')" style="background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--primary);padding:4px 8px;font-family:'Heebo',sans-serif;" title="שמור כ-PDF">📄 PDF</button>
             <button onclick="deleteHandover('${key}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);padding:4px;" title="מחק">🗑️</button>
           </div>
         </div>
@@ -6391,6 +6407,66 @@ function renderHandoverList() {
       </div>`;
   }).join('');
 }
+
+
+function printHandoverPDF(key) {
+  const db = getDB();
+  const h = db.handovers && db.handovers[key];
+  if (!h) { showToast('פרוטוקול לא נמצא', 'error'); return; }
+
+  const dateHeb = new Date(h.date).toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const createdHeb = h.createdAt ? new Date(h.createdAt).toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+
+  const tasksHtml = h.tasks.map((t, i) =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#666;width:30px;">${i+1}.</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${t}</td></tr>`
+  ).join('');
+
+  const win = window.open('', '_blank', 'width=700,height=600');
+  win.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<title>פרוטוקול העברת מקל — ${h.fullName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family:'Heebo',sans-serif; direction:rtl; margin:0; padding:32px; color:#1e293b; background:#fff; }
+  h1 { font-size:22px; font-weight:800; color:#1a56e8; margin-bottom:4px; }
+  .sub { font-size:13px; color:#64748b; margin-bottom:24px; }
+  .card { background:#f8fafc; border-radius:12px; padding:20px 24px; margin-bottom:20px; border:1px solid #e2e8f0; }
+  .label { font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .value { font-size:15px; font-weight:600; color:#1e293b; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  .footer { margin-top:32px; font-size:11px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:12px; }
+  @media print { body { padding:16px; } }
+</style>
+</head>
+<body>
+<h1>📋 פרוטוקול העברת מקל</h1>
+<div class="sub">נוצר: ${createdHeb}</div>
+
+<div class="card">
+  <div style="display:flex;gap:32px;flex-wrap:wrap;">
+    <div><div class="label">שם העובד</div><div class="value">👤 ${h.fullName}</div></div>
+    <div><div class="label">תאריך חופשה</div><div class="value">📅 ${dateHeb}</div></div>
+    ${h.contact ? `<div><div class="label">מחליף/ה</div><div class="value">📞 ${h.contact}</div></div>` : ''}
+  </div>
+</div>
+
+<div class="card">
+  <div class="label">משימות לטיפול</div>
+  <table>
+    <tbody>${tasksHtml}</tbody>
+  </table>
+</div>
+
+<div class="footer">Dazura — מערכת ניהול חופשות | הופק אוטומטית</div>
+
+<script>window.onload = function(){ window.print(); }<\/script>
+</body>
+</html>`);
+  win.document.close();
+}
+
 
 function deleteHandover(key) {
   if (!confirm('למחוק פרוטוקול זה?')) return;

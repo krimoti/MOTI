@@ -956,6 +956,15 @@
         <!-- Employee Wellbeing Scores -->
         <div class="admin-section" id="employeeScoresSection"></div>
 
+        <!-- Handover Protocols -->
+        <div class="admin-section" id="handoverSection">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div class="section-title" style="margin-bottom:0;"><span class="section-title-icon">📋</span> פרוטוקולי העברת מקל <span id="handoverBadge" style="background:var(--primary);color:white;border-radius:20px;padding:2px 10px;font-size:12px;margin-right:8px;display:none;"></span></div>
+            <button class="btn btn-outline" style="font-size:12px;" onclick="clearAllHandovers()">🗑️ מחק הכל</button>
+          </div>
+          <div id="handoverList"></div>
+        </div>
+
       </div>
     </div>
 
