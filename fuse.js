@@ -10,19 +10,83 @@
 const DazuraFuse = (() => {
 
   // ──────────────────────────────────────────
-  // 1. FUSE.JS LOADER
+  // 1. BUILT-IN FUZZY SEARCH (ללא CDN — 100% מקומי)
   // ──────────────────────────────────────────
-  let _fuseLoaded = false;
+
+  // Minimal Fuse.js-compatible implementation — no network needed
+  // Supports: keys with weight, threshold, includeScore, ignoreLocation
+  class BuiltinFuse {
+    constructor(list, options = {}) {
+      this._list      = list;
+      this._keys      = (options.keys || []).map(k => typeof k === 'string' ? { name: k, weight: 1 } : k);
+      this._threshold = options.threshold !== undefined ? options.threshold : 0.6;
+      this._minLen    = options.minMatchCharLength || 1;
+    }
+
+    search(pattern) {
+      if (!pattern || pattern.length < this._minLen) return [];
+      const p = pattern.toLowerCase();
+      const results = [];
+
+      for (const item of this._list) {
+        let bestScore = 1; // 0 = perfect, 1 = no match
+        for (const key of this._keys) {
+          const val = String(this._get(item, key.name) || '').toLowerCase();
+          if (!val) continue;
+          const score = this._score(p, val) * (1 - (key.weight || 1) * 0.1);
+          if (score < bestScore) bestScore = score;
+        }
+        if (bestScore <= this._threshold) {
+          results.push({ item, score: bestScore });
+        }
+      }
+
+      return results.sort((a, b) => a.score - b.score);
+    }
+
+    _get(obj, path) {
+      return path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj);
+    }
+
+    _score(pattern, text) {
+      if (text === pattern) return 0;
+      if (text.includes(pattern)) return 0.1 + (1 - pattern.length / text.length) * 0.2;
+
+      // Levenshtein-based score
+      const d = this._lev(pattern, text);
+      const maxLen = Math.max(pattern.length, text.length);
+      return d / maxLen;
+    }
+
+    _lev(a, b) {
+      if (a.length === 0) return b.length;
+      if (b.length === 0) return a.length;
+      // Cap at 20 chars for performance
+      if (a.length > 20) a = a.slice(0, 20);
+      if (b.length > 20) b = b.slice(0, 20);
+      const m = a.length, n = b.length;
+      const dp = Array.from({ length: m + 1 }, (_, i) => [i]);
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          dp[i][j] = a[i-1] === b[j-1]
+            ? dp[i-1][j-1]
+            : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+        }
+      }
+      return dp[m][n];
+    }
+  }
+
+  // Expose as window.Fuse so existing fuzzyFind* code works unchanged
+  if (typeof window !== 'undefined') window.Fuse = BuiltinFuse;
+
+  let _fuseLoaded = true; // always ready — no network needed
 
   function loadFuse() {
-    if (_fuseLoaded && window.Fuse) return Promise.resolve(true);
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fuse.js/7.0.0/fuse.min.js';
-      script.onload  = () => { _fuseLoaded = true; resolve(true); };
-      script.onerror = () => resolve(false);
-      document.head.appendChild(script);
-    });
+    if (typeof window !== 'undefined') window.Fuse = BuiltinFuse;
+    _fuseLoaded = true;
+    return Promise.resolve(true);
   }
 
   // ──────────────────────────────────────────

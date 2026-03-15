@@ -6444,6 +6444,8 @@ async function pullFromFirebase() {
         handovers:        JSON.parse(data.handovers        || '{}'),
         handoversArchive: JSON.parse(data.handoversArchive || '{}'),
         handoverPending:  JSON.parse(data.handoverPending  || '{}'),
+        orgTree:          JSON.parse(data.orgTree          || '{}'),
+        timeClockRecords: JSON.parse(data.timeClockRecords || '{}'),
       };
       // Always guarantee admin exists even if Firebase was wiped
       ensureAdminExists(cloudDB);
@@ -6482,6 +6484,8 @@ async function pushToFirebase() {
       handovers:        JSON.stringify(db.handovers || {}),
       handoversArchive: JSON.stringify(db.handoversArchive || {}),
       handoverPending:  JSON.stringify(db.handoverPending || {}),
+      orgTree:          JSON.stringify(db.orgTree || {}),
+      timeClockRecords: JSON.stringify(db.timeClockRecords || {}),
       updatedAt:        new Date().toISOString(),
       updatedBy:        currentUser?.username || 'system'
     });
@@ -7219,7 +7223,7 @@ async function sendAIMessage() {
     const freshUser = (db.users && db.users[currentUser.username]) ? db.users[currentUser.username] : currentUser;
 
     if (typeof DazuraFuse !== 'undefined') {
-      // DazuraFuse: קודם AI מקומי, אחר כך Claude API אם צריך
+      // DazuraFuse: AI מקומי לחלוטין — ללא גישה לרשת
       const resp = await DazuraFuse.respondAsync(msg, freshUser, db);
       setTimeout(() => {
         hideAITyping();
