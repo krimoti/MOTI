@@ -13,6 +13,7 @@ let pendingExcelQuotas = [];
 let firebaseApp = null;
 const calState = { year: 2026, month: 1 };
 const deptSelectedMap = {};
+let _announcementShownIds = new Set(); // הודעות שכבר הוצגו בסשן הנוכחי
 
 // ── Security ──────────────────────────────────────────────────
 const _loginAttempts = {};
@@ -581,6 +582,7 @@ function doLogout() {
   if (aiMsgs) aiMsgs.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI. שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
   // Firebase Auth sign out — non-blocking
   ensureFirebaseAuth().then(auth => auth.signOut()).catch(()=>{});
+  _announcementShownIds = new Set(); // אפס הודעות שהוצגו
   currentUser = null;
   hideAIButton();
   ['appScreen','timeClockScreen','moduleSelectorScreen','ceoDashboardScreen'].forEach(id => {
@@ -2280,17 +2282,20 @@ function saveEmpSalary(username, val) {
 // 📢 ANNOUNCEMENTS — show CEO messages to all employees
 // ============================================================
 function renderAnnouncements() {
-
   const db  = getDB();
   const ann = db.announcements || [];
   if (!ann.length || !currentUser) return;
 
-  // Find newest unseen announcement (not acked by this user)
+  // Find newest unseen announcement (not acked + not already shown this session)
   const unseen = ann.find(a => {
     if (!a.id) return false;
+    if (_announcementShownIds.has(a.id)) return false; // כבר הוצג בסשן זה
     return !(a.acks && a.acks[currentUser.username]);
   });
   if (!unseen) return;
+
+  // סמן כ"הוצג" בסשן הנוכחי — לא יופיע שוב עד שהמשתמש יתנתק
+  _announcementShownIds.add(unseen.id);
 
   const d = new Date(unseen.ts);
   const dateStr = `${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -6334,6 +6339,62 @@ window.addEventListener('load', function() {
 // ============================================================
 let _aiPanelOpen = false;
 
+// ── כפתורי קיצור רנדומליים ──────────────────────────────────
+const AI_QUICK_POOL = {
+  employee: [
+    'מה היתרה שלי?', 'מי בחופשה היום?', 'מה הסטטוס שלי?',
+    'איך מגישים בקשת חופשה?', 'מה החגים הקרובים?',
+    'מי מהצוות כאן מחר?', 'מה הניצול שלי לפי חודשים?',
+    'מה התחזית לסוף השנה?', 'מי עובד מהבית היום?',
+    'איך מתקנים שעות שגויות?', 'מה המחלקה שלי?',
+    'כמה ימים נשארו לי?', 'מה קורה בחג?',
+    'מי מחליף אותי בחופשה?', 'איך משנים סיסמה?',
+  ],
+  manager: [
+    'מי בחופשה מחר?', 'בקשות ממתינות לאישור',
+    'מצב הצוות היום', 'מי לא לקח חופש 90 יום?',
+    'תחזה מחסור כוח אדם', 'סקירת יתרות הצוות',
+    'מי עובד מהבית?', 'ציוני רווחת עובדים',
+    'מה עלות החופשות הצבורות?', 'השבוע בחברה',
+    'בקשות ממתינות מעל 48 שעות', 'מפת חום חופשות',
+  ],
+  admin: [
+    'כמה עובדים יש?', 'מי בחופשה היום?',
+    'מי לא לקח חופש 90 יום?', 'תחזה מחסור כוח אדם',
+    'ציוני רווחת עובדים', 'עלות החופשות הצבורות',
+    'יומן שינויים', 'בקשות ממתינות לאישור',
+    'מצב כללי היום', 'מה אתה יכול?',
+    'איך מוסיפים עובד?', 'איך מחברים Firebase?',
+  ],
+};
+
+function renderAIQuickBtns() {
+  const container = document.getElementById('aiQuickBtns');
+  if (!container || !currentUser) return;
+
+  const isMobile = window.innerWidth < 600;
+  const maxBtns  = isMobile ? 2 : 4;
+
+  let pool;
+  if (currentUser.role === 'admin' || currentUser.role === 'accountant') pool = AI_QUICK_POOL.admin;
+  else if (currentUser.role === 'manager') pool = AI_QUICK_POOL.manager;
+  else pool = AI_QUICK_POOL.employee;
+
+  // בחר רנדומלית
+  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, maxBtns);
+  container.innerHTML = shuffled.map(q =>
+    `<button class="ai-quick-btn" onclick="aiQuickAsk(this,'${q.replace(/'/g, "\'")}')">` +
+    q + `</button>`
+  ).join('');
+}
+
+function aiQuickAsk(btn, question) {
+  // הסר את הכפתור שנלחץ + ערבב מחדש
+  document.getElementById('aiInput').value = question;
+  sendAIMessage();
+  setTimeout(renderAIQuickBtns, 500);
+}
+
 function toggleAIPanel() {
   const panel = document.getElementById('aiPanel');
   const btn   = document.getElementById('aiFloatBtn');
@@ -6343,6 +6404,7 @@ function toggleAIPanel() {
   if (_aiPanelOpen) {
     setTimeout(() => { document.getElementById('aiInput')?.focus(); }, 300);
     scrollAIToBottom();
+    renderAIQuickBtns();
   }
 }
 
