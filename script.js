@@ -6429,15 +6429,14 @@ async function sendAIMessage() {
     const freshUser = (db.users && db.users[currentUser.username]) ? db.users[currentUser.username] : currentUser;
 
     if (typeof DazuraFuse !== 'undefined') {
-      // DazuraFuse: קודם AI מקומי, אחר כך Claude API אם צריך
       const resp = await DazuraFuse.respondAsync(msg, freshUser, db);
       setTimeout(() => {
         hideAITyping();
         appendAIMessage(resp, 'ai');
         scrollAIToBottom();
+        renderAIQuickBtns();
       }, delay);
     } else {
-      // Fallback ל-DazuraAI בלבד
       setTimeout(() => {
         hideAITyping();
         let response;
@@ -6448,6 +6447,7 @@ async function sendAIMessage() {
         }
         appendAIMessage(response, 'ai');
         scrollAIToBottom();
+        renderAIQuickBtns();
       }, delay);
     }
   } catch(e) {
