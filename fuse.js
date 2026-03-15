@@ -17,7 +17,7 @@ const DazuraFuse = (() => {
     constructor(list, options = {}) {
       this._list      = list;
       this._keys      = (options.keys || []).map(k => typeof k === 'string' ? { name: k, weight: 1 } : k);
-      this._threshold = options.threshold !== undefined ? options.threshold : 0.6;
+      this._threshold = options.threshold !== undefined ? options.threshold : 0.4;
       this._minLen    = options.minMatchCharLength || 1;
     }
     search(pattern) {
