@@ -131,21 +131,45 @@ const DazuraFuse = (() => {
   function getCustomQA(db) { return db?.customQA || []; }
 
   function matchCustomQA(text, db) {
-    const qa = getCustomQA(db);
+    // מיזוג: customQA מהמשתמש + BUILTIN_QA מובנה
+    const userQA = getCustomQA(db);
+    const builtinQA = (typeof BUILTIN_QA !== 'undefined') ? BUILTIN_QA : [];
+    const qa = [...userQA, ...builtinQA];
     if (!qa.length) return null;
     const t = normalizeText(text);
+
+    // שלב 1: התאמה מדויקת — שאלה ראשית
     for (const entry of qa) {
       const q = normalizeText(entry.question);
-      if (t === q || t.includes(q) || q.includes(t)) return entry.answer;
-      const aliases = (entry.aliases || []).map(a => normalizeText(a));
-      if (aliases.some(a => t.includes(a))) return entry.answer;
+      if (t === q) return entry.answer;
+      if (t.includes(q) && q.length >= 4) return entry.answer;
+      if (q.includes(t) && t.length >= 4) return entry.answer;
     }
-    const fuse = new BuiltinFuse(qa, {
-      keys: [{ name:'question', weight:0.7 }, { name:'tags', weight:0.3 }],
-      threshold: 0.38, minMatchCharLength: 3,
+
+    // שלב 2: התאמה מדויקת — aliases
+    for (const entry of qa) {
+      const aliases = (entry.aliases || []).map(a => normalizeText(a));
+      if (aliases.some(a => a && (t === a || (t.includes(a) && a.length >= 4) || (a.includes(t) && t.length >= 4)))) {
+        return entry.answer;
+      }
+    }
+
+    // שלב 3: חיפוש פאזי — שאלה + aliases + תגיות
+    // בנה אינדקס מורחב: שאלה ראשית + כל ה-aliases כרשומות נפרדות
+    const expandedIndex = [];
+    qa.forEach(entry => {
+      expandedIndex.push({ _entry: entry, _searchText: normalizeText(entry.question) + ' ' + (entry.tags||'') });
+      (entry.aliases || []).forEach(alias => {
+        if (alias) expandedIndex.push({ _entry: entry, _searchText: normalizeText(alias) });
+      });
+    });
+
+    const fuse = new BuiltinFuse(expandedIndex, {
+      keys: [{ name:'_searchText', weight:1 }],
+      threshold: 0.45, minMatchCharLength: 3,
     });
     const results = fuse.search(t);
-    if (results.length && results[0].score < 0.33) return results[0].item.answer;
+    if (results.length && results[0].score < 0.42) return results[0].item._entry.answer;
     return null;
   }
 
