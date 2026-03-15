@@ -1149,6 +1149,41 @@
       </div>
 
       <!-- Department Management -->
+      <!-- Custom Q&A for AI -->
+      <div class="admin-section" id="customQASection">
+        <div class="section-title"><span class="section-title-icon">🤖</span> שאלות ותשובות מותאמות ל-AI</div>
+        <div style="background:var(--primary-light);border:1px solid var(--primary);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+          הוסף שאלות ותשובות שה-AI יחזיר בדיוק — מדיניות חופשות, נהלים פנימיים, שאלות נפוצות.<br>
+          <strong>דוגמה:</strong> שאלה: "כמה ימי חופש מגיעים לעובד חדש?" → תשובה: "עובד חדש זכאי ל-10 ימים בשנה הראשונה."
+        </div>
+
+        <!-- Add new entry -->
+        <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:16px;max-width:700px;">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;">➕ הוסף שאלה חדשה</div>
+          <div class="form-group">
+            <label class="form-label">שאלה (ניתן גם לכתוב מספר ניסוחים, מופרדים בפסיק)</label>
+            <input type="text" id="qaNewQuestion" class="form-input" placeholder='לדוגמה: "כמה ימי חופש לעובד חדש, ימי חופשה לעובד חדש"' dir="rtl">
+          </div>
+          <div class="form-group">
+            <label class="form-label">תשובה</label>
+            <textarea id="qaNewAnswer" class="form-input" rows="3" placeholder="הכנס את התשובה המדויקת שה-AI יחזיר..." dir="rtl" style="resize:vertical;min-height:80px;"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">תגיות (אופציונלי — לשיפור זיהוי)</label>
+            <input type="text" id="qaNewTags" class="form-input" placeholder="חופשה, נוהל, זכויות..." dir="rtl">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary" onclick="saveCustomQAEntry()">💾 שמור</button>
+            <button class="btn btn-outline" style="font-size:12px;" onclick="document.getElementById('qaFileInput').click()">📂 ייבא מקובץ CSV/JSON</button>
+            <input type="file" id="qaFileInput" accept=".csv,.json" style="display:none;" onchange="importCustomQA(this)">
+            <button class="btn btn-outline" style="font-size:12px;" onclick="exportCustomQA()">📤 ייצא</button>
+          </div>
+        </div>
+
+        <!-- Q&A list -->
+        <div id="customQAList" style="max-width:700px;"></div>
+      </div>
+
       <div class="admin-section" id="dataResetSection">
         <div class="section-title"><span class="section-title-icon">⚠️</span> איפוס נתונים</div>
         <div style="background:var(--danger-light);border:1px solid #fca5a5;border-radius:10px;padding:16px;max-width:500px;">
@@ -1159,6 +1194,10 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn" onclick="resetLocalData()" style="background:var(--danger);color:white;border:none;">🗑️ אפס את כל הנתונים</button>
             <button class="btn btn-outline" onclick="exportBackup()" style="font-size:13px;">💾 גבה נתונים (JSON)</button>
+            <label class="btn btn-outline" style="font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+              📥 שחזר מגיבוי
+              <input type="file" accept=".json" style="display:none;" onchange="importBackup(this)">
+            </label>
           </div>
         </div>
       </div>
@@ -1166,18 +1205,92 @@
       <!-- Department Management -->
       <div class="admin-section" id="deptMgmtSection">
         <div class="section-title"><span class="section-title-icon">🏢</span> ניהול מחלקות ומנהלים</div>
-        
-        <!-- Add department -->
-        <div style="display:flex;gap:8px;max-width:400px;margin-bottom:20px;">
-          <input type="text" id="newDeptInput" class="form-input" placeholder="שם מחלקה חדשה" style="flex:1;" dir="rtl">
-          <button class="btn btn-success" onclick="addDepartment()">➕ הוסף</button>
+
+        <!-- Tabs: דירוג / מחלקות -->
+        <div style="display:flex;gap:6px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0;">
+          <button id="orgTabDept" onclick="switchOrgTab('dept')"
+            style="padding:8px 18px;border:none;border-bottom:3px solid var(--primary);background:none;font-family:'Heebo',sans-serif;font-size:14px;font-weight:800;color:var(--primary);cursor:pointer;margin-bottom:-2px;">
+            🏢 מחלקות ומנהלים
+          </button>
+          <button id="orgTabTree" onclick="switchOrgTab('tree')"
+            style="padding:8px 18px;border:none;border-bottom:3px solid transparent;background:none;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;color:var(--text-muted);cursor:pointer;margin-bottom:-2px;">
+            🌲 עץ ארגוני — מדרג הרשאות
+          </button>
         </div>
 
-        <!-- Dept + Manager table -->
-        <div id="deptManagerTable" style="max-width:700px;"></div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:8px;">
-          💡 כל עובד שיגיש בקשת חופשה — היא תועבר אוטומטית למנהל המחלקה שלו
+        <!-- TAB: מחלקות ומנהלים -->
+        <div id="orgTabDeptContent">
+          <div style="background:var(--primary-light);border:1px solid var(--primary);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+            <strong>כאן מגדירים:</strong> מי המנהל הישיר של כל מחלקה — הוא יאשר חופשות ויראה נתוני עובדיו בלבד.
+          </div>
+          <div style="display:flex;gap:8px;max-width:400px;margin-bottom:16px;align-items:center;">
+            <input type="text" id="newDeptInput" class="form-input" placeholder="שם מחלקה חדשה..." style="flex:1;" dir="rtl">
+            <button class="btn btn-success" onclick="addDepartment()">➕ הוסף מחלקה</button>
+          </div>
+          <div id="deptManagerTable" style="max-width:760px;"></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:10px;">
+            💡 בקשות חופשה מועברות אוטומטית למנהל המחלקה הרלוונטי
+          </div>
         </div>
+
+        <!-- TAB: עץ ארגוני -->
+        <div id="orgTabTreeContent" style="display:none;">
+          <div style="background:var(--primary-light);border:1px solid var(--primary);border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:13px;line-height:1.8;">
+            <div style="font-weight:800;font-size:14px;color:var(--primary-dark);margin-bottom:8px;">🌲 איך עובד העץ הארגוני?</div>
+            <div style="color:var(--text);">
+              כל מנהל רואה את <strong>המחלקות שהוגדרו לו ישירות</strong>, ובנוסף <strong>את כל מה שתחת המנהלים שמדווחים לו</strong>.<br>
+              <span style="color:var(--primary-dark);font-weight:700;">דוגמה:</span>
+              מנהל תפעול מנהל: הנדסה + פיתוח + ייצור → יראה את כל עובדי שלוש המחלקות.<br>
+              הנהלה ראשית ← מנהל תפעול ← מנהל הנדסה ← עובדי הנדסה
+            </div>
+          </div>
+
+          <!-- Add manager to org tree -->
+          <div style="background:var(--surface2);border-radius:14px;padding:18px;margin-bottom:20px;max-width:720px;border:1px solid var(--border);">
+            <div style="font-weight:800;font-size:14px;margin-bottom:14px;color:var(--text);">➕ הוסף / ערוך מנהל בעץ</div>
+
+            <!-- Row 1: who + reports to -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+              <div>
+                <label style="font-size:12px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;">👤 המנהל</label>
+                <select id="orgTreeManager" class="form-input" dir="rtl" style="font-size:13px;">
+                  <option value="">— בחר עובד —</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;">⬆️ מדווח ל (מי מעליו)</label>
+                <select id="orgTreeParent" class="form-input" dir="rtl" style="font-size:13px;">
+                  <option value="">— שורש (מנכ"ל / הנהלה ראשית) —</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Top-level toggle -->
+            <div style="display:flex;align-items:center;gap:10px;background:var(--primary-light);border-radius:10px;padding:10px 14px;margin-bottom:12px;">
+              <input type="checkbox" id="orgTreeTopLevel" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;">
+              <div>
+                <div style="font-size:13px;font-weight:700;">🔑 גישה מלאה לכל העובדים</div>
+                <div style="font-size:11px;color:var(--text-muted);">סמן עבור מנכ"ל / הנהלה ראשית — יראה את כל הנתונים ללא סינון</div>
+              </div>
+            </div>
+
+            <!-- Direct depts -->
+            <div>
+              <label style="font-size:12px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:6px;">🏢 מחלקות שהוא מנהל ישירות</label>
+              <div id="orgTreeDeptsCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:var(--surface);border-radius:10px;border:1px solid var(--border);min-height:48px;"></div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:5px;">עובד "גישה מלאה" — לא צריך לסמן מחלקות · מנהל ביניים — סמן מחלקות שמדווחות לו ישירות</div>
+            </div>
+
+            <div style="margin-top:14px;display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="saveOrgTreeEntry()">💾 שמור</button>
+              <button class="btn btn-outline" onclick="populateOrgTreeSelects();renderOrgTree();">🔄 רענן</button>
+            </div>
+          </div>
+
+          <!-- Current org tree display -->
+          <div id="orgTreeDisplay" style="max-width:720px;"></div>
+        </div>
+
       </div>
 
       <!-- Quota Upload -->

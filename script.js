@@ -680,34 +680,31 @@ function doRegister() {
   const requireApproval = getSettings().requireRegistrationApproval !== false; // default: true
   const status = requireApproval ? 'pending' : 'active';
   
-  db.users[username] = {
-    fullName, username, password: hashPass(pass),
-    dept, role: 'employee', status,
-    email: document.getElementById('regEmail')?.value.trim() || '',
-    quotas: { '2026': { annual: 0, initialBalance: 0 } },
-    registeredAt: new Date().toISOString()
-  };
-  saveDB(db);
-
-  // Create Firebase Auth user if email provided
-  const email = document.getElementById('regEmail')?.value.trim();
-  if (email) {
-    createFirebaseAuthUser(email, pass).then(r => {
-      if (!r.success) console.warn('Firebase Auth user creation failed:', r.error);
-    });
-  }
-  
-  closeModal('registerModal');
-  if (requireApproval) {
-    // Show waiting screen instead of logging in
-    document.getElementById('loginScreen').classList.remove('active');
-    document.getElementById('pendingApprovalScreen').classList.add('active');
-    document.getElementById('pendingUserName').textContent = fullName;
-  } else {
-    showToast('✅ נרשמת בהצלחה! כעת תוכל להיכנס למערכת', 'success');
-    document.getElementById('loginUsername').value = username;
-  }
-  auditLog('register', `${fullName} (${username}) נרשם — ממתין לאישור`);
+  const email = document.getElementById('regEmail')?.value.trim() || '';
+  _sha256(pass).then(sha256hash => {
+    db.users[username] = {
+      fullName, username, password: sha256hash,
+      dept, role: 'employee', status, email,
+      quotas: { [new Date().getFullYear()]: { annual: 0, initialBalance: 0 } },
+      registeredAt: new Date().toISOString()
+    };
+    saveDB(db);
+    if (email) {
+      createFirebaseAuthUser(email, pass).then(r => {
+        if (!r.success) console.warn('Firebase Auth user creation failed:', r.error);
+      });
+    }
+    closeModal('registerModal');
+    if (requireApproval) {
+      document.getElementById('loginScreen').classList.remove('active');
+      document.getElementById('pendingApprovalScreen').classList.add('active');
+      document.getElementById('pendingUserName').textContent = fullName;
+    } else {
+      showToast('✅ נרשמת בהצלחה! כעת תוכל להיכנס למערכת', 'success');
+      document.getElementById('loginUsername').value = username;
+    }
+    auditLog('register', `${fullName} (${username}) נרשם — ממתין לאישור`);
+  });
 }
 
 // ============================================================
@@ -724,6 +721,7 @@ function showApp(skipModuleSelector) {
   }
 
   document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('forcePasswordScreen')?.classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
   showAIButton();
   // Set user info
@@ -1507,7 +1505,15 @@ function renderAIForecast() {
   const db = getDB();
   const year = new Date().getFullYear();
   const MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  const employees = Object.values(db.users).filter(u => u.role === 'employee' || u.role === 'manager');
+
+  // Scope to manager's dept — admin sees all
+  const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'accountant');
+  const employees = Object.values(db.users).filter(u => {
+    if (u.role === 'admin' || u.role === 'accountant') return false;
+    if (!isUserActive(u)) return false;
+    if (isAdmin) return true;
+    return managerManagesUser(currentUser.username, u, db);
+  });
   const totalEmp = Math.max(employees.length, 1);
 
   // Build week-by-week map: weekKey → count of vacation days
@@ -1515,8 +1521,8 @@ function renderAIForecast() {
   const monthMap = new Array(12).fill(0); // month index → total days
   const deptMonthMap = {}; // dept → [12 months]
 
-  Object.values(db.users).forEach(user => {
-    const dept = Array.isArray(user.dept) ? user.dept[0] : user.dept || 'כללי';
+  employees.forEach(user => {
+    const dept = getUserDept(user) || 'כללי';
     if (!deptMonthMap[dept]) deptMonthMap[dept] = new Array(12).fill(0);
 
     Object.entries(db.vacations[user.username] || {}).forEach(([dt, type]) => {
@@ -1901,6 +1907,14 @@ function renderManagerDashboard() {
   const todayStr = now.toISOString().slice(0,10);
   const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'accountant';
+
+  // Build scoped user list — admin sees all, dept manager sees only their dept
+  const scopedUsers = Object.values(db.users).filter(u => {
+    if (isAdmin) return true;
+    return managerManagesUser(currentUser.username, u, db);
+  });
+
   const todayEl = document.getElementById('managerTodayDate');
   if(todayEl) todayEl.textContent = `${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
@@ -1909,13 +1923,12 @@ function renderManagerDashboard() {
 
   // TODAY STATS
   const todayVacations = [], todayWFH = [];
-  Object.values(db.users).forEach(user => {
+  scopedUsers.forEach(user => {
     const vacs = db.vacations[user.username] || {};
     if(['full','half'].includes(vacs[todayStr])) todayVacations.push(user.fullName);
     if(vacs[todayStr] === 'wfh') todayWFH.push(user.fullName);
   });
-  const totalEmployees = Object.values(db.users).filter(u => u.role === 'employee').length;
-  const isAdmin = currentUser.role === 'admin';
+  const totalEmployees = scopedUsers.filter(u => u.role === 'employee' || isUserDeptManager(u.username)).length;
   const myUsername = currentUser.username;
   // Manager sees only requests assigned to them (or all if admin)
   const allPending = (db.approvalRequests || []).filter(r => r.status === 'pending');
@@ -1972,9 +1985,9 @@ function renderManagerDashboard() {
   if(upcomingEl) {
     const in30 = new Date(now.getTime()+30*86400000).toISOString().slice(0,10);
     const upcoming = [];
-    Object.values(db.users).forEach(user => {
+    scopedUsers.forEach(user => {
       Object.entries(db.vacations[user.username]||{}).forEach(([dt,type]) => {
-        if(dt>=todayStr && dt<=in30) upcoming.push({name:user.fullName,dept:user.dept?.[0]||'',date:dt,type});
+        if(dt>=todayStr && dt<=in30) upcoming.push({name:user.fullName,dept:getUserDept(user),date:dt,type});
       });
     });
     upcoming.sort((a,b)=>a.date.localeCompare(b.date));
@@ -2009,13 +2022,13 @@ function renderManagerDashboard() {
   const teamEl = document.getElementById('managerTeamBalance');
   if(teamEl) {
     const year = now.getFullYear();
-    const rows = Object.values(db.users).filter(u=>u.role==='employee').map(u=>{
+    const rows = scopedUsers.filter(u=>u.role==='employee'||isUserDeptManager(u.username)).map(u=>{
       const cb = calcBalance(u.username, year);
       const pct = Math.min(100, cb.stats.total/Math.max(1,cb.annual)*100);
       const color = cb.projectedEndBalance<0?'var(--danger)':cb.projectedEndBalance<3?'var(--warning)':'var(--success)';
       return `<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:10px;font-weight:600;">${u.fullName}</td>
-        <td style="padding:10px;text-align:center;font-size:13px;">${u.dept?.[0]||'-'}</td>
+        <td style="padding:10px;text-align:center;font-size:13px;">${getUserDept(u)||'-'}</td>
         <td style="padding:10px;text-align:center;">${cb.annual}</td>
         <td style="padding:10px;text-align:center;">${cb.stats.total}</td>
         <td style="padding:10px;min-width:100px;">
@@ -2051,7 +2064,7 @@ function findOverlaps(db, todayStr) {
   const in30 = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
   const byDateDept = {};
   Object.values(db.users).forEach(user => {
-    const dept = user.dept?.[0]||'כללי';
+    const dept = getUserDept(user)||'כללי';
     Object.entries(db.vacations[user.username]||{}).forEach(([dt,type])=>{
       if(dt>=todayStr && dt<=in30 && type!=='wfh') {
         const key=dt+'|'+dept;
@@ -2101,7 +2114,7 @@ function exportPayroll() {
         else if(type==='half')halfDays++;
       }
     });
-    if(fullDays+halfDays>0) rows.push({id:user.username,name:user.fullName,dept:user.dept?.[0]||'',fullDays,halfDays,total:fullDays+halfDays*0.5});
+    if(fullDays+halfDays>0) rows.push({id:user.username,name:user.fullName,dept:getUserDept(user)||'',fullDays,halfDays,total:fullDays+halfDays*0.5});
   });
 
   let csv='';
@@ -2144,7 +2157,7 @@ function exportMonthlyReport() {
   csv+='שם עובד,מחלקה,מכסה שנתית,ניצל,יתרה נוכחית,צפי סוף שנה\n';
   Object.values(db.users).filter(u=>u.role==='employee').forEach(user=>{
     const cb=calcBalance(user.username,year);
-    csv+=`${user.fullName},${user.dept?.[0]||''},${cb.annual},${cb.stats.total},${cb.balance.toFixed(1)},${cb.projectedEndBalance.toFixed(1)}\n`;
+    csv+=`${user.fullName},${getUserDept(user)||''},${cb.annual},${cb.stats.total},${cb.balance.toFixed(1)},${cb.projectedEndBalance.toFixed(1)}\n`;
   });
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
@@ -2266,6 +2279,7 @@ function renderAdmin() {
   
   renderAdminVacations();
   renderApprovalRequests();
+  renderCustomQAList();
 }
 
 function saveEmpSalary(username, val) {
@@ -2503,17 +2517,19 @@ function saveNewEmployee() {
     errEl.textContent = 'שם משתמש כבר קיים'; errEl.style.display = 'block'; return;
   }
 
-  db.users[username] = {
-    fullName: name, username, password: hashPass(pass),
-    dept, role, email: '',
-    dailySalary: salary,
-    quotas: { '2026': { annual: 0, initialBalance: 0 } }
-  };
-  saveDB(db);
-  closeModal('addEmpModal');
-  auditLog('employee_added', `עובד חדש נוסף: ${name}`);
-  showToast(`✅ עובד ${name} נוסף בהצלחה`, 'success');
-  renderAdmin();
+  _sha256(pass).then(sha256hash => {
+    db.users[username] = {
+      fullName: name, username, password: sha256hash,
+      dept, role, email: '', dailySalary: salary,
+      mustChangePassword: true,
+      quotas: { [new Date().getFullYear()]: { annual: 0, initialBalance: 0 } }
+    };
+    saveDB(db);
+    closeModal('addEmpModal');
+    auditLog('employee_added', `עובד חדש נוסף: ${name}`);
+    showToast(`✅ עובד ${name} נוסף — יידרש לשנות סיסמה בכניסה`, 'success');
+    renderAdmin();
+  });
 }
 
 function deleteEmployee(username) {
@@ -2588,6 +2604,104 @@ function showToast(msg, type = 'success') {
 // ============================================================
 // DEPARTMENT MULTISELECT
 // ============================================================
+
+// Safe dept display — handles both string and array
+function getUserDept(user) {
+  if (!user || !user.dept) return '';
+  if (Array.isArray(user.dept)) return user.dept[0] || '';
+  if (typeof user.dept === 'string') return user.dept;
+  return '';
+}
+// Get all depts for a user as array
+function getUserDepts(user) {
+  if (!user || !user.dept) return [];
+  if (Array.isArray(user.dept)) return user.dept.filter(Boolean);
+  if (typeof user.dept === 'string') return user.dept ? [user.dept] : [];
+  return [];
+}
+// ============================================================
+// ORG TREE — getManagerScope(managerUsername, db)
+// Returns the SET of dept names this manager can see
+// (their direct depts + all depts under their sub-managers, recursively)
+// null = sees ALL (admin / top-level with no restriction)
+// ============================================================
+function getManagerScope(managerUsername, db) {
+  const users = db.users || {};
+  const managerUser = users[managerUsername];
+  if (!managerUser) return new Set();
+
+  // Admin / accountant always see everything
+  if (managerUser.role === 'admin' || managerUser.role === 'accountant') return null;
+
+  const orgTree    = db.orgTree    || {};
+  const deptManagers = db.deptManagers || {};
+  const node       = orgTree[managerUsername];
+
+  // Explicit top-level flag → sees all
+  if (node && node.topLevel) return null;
+
+  // Collect DIRECT depts
+  let directDepts = [];
+  if (node && node.directDepts && node.directDepts.length) {
+    directDepts = node.directDepts;
+  } else {
+    // Legacy deptManagers fallback
+    directDepts = Object.entries(deptManagers)
+      .filter(([, mgr]) => mgr === managerUsername)
+      .map(([dept]) => dept);
+  }
+
+  // Root node in orgTree (parentManager===null) with sub-managers but no direct depts
+  // → top-level executive (CEO-style) → sees ALL
+  const isRoot        = node && (node.parentManager === null || node.parentManager === undefined);
+  const hasSubMgrs    = Object.values(orgTree).some(n => n.parentManager === managerUsername);
+  if (isRoot && !directDepts.length && hasSubMgrs) return null;
+
+  // Legacy: role==='manager' with no depts → sees all
+  if (!directDepts.length && managerUser.role === 'manager' && !node) return null;
+
+  // No depts, no special flag → sees only self
+  if (!directDepts.length) return new Set();
+
+  // Recursively collect all depts (BFS through children in orgTree)
+  const allDepts = new Set(directDepts);
+
+  const subManagers = Object.entries(orgTree)
+    .filter(([, n]) => n.parentManager === managerUsername)
+    .map(([u]) => u);
+
+  // Legacy: any deptManagers entry whose dept is in our scope → their manager is a sub
+  for (const [dept, mgr] of Object.entries(deptManagers)) {
+    if (directDepts.includes(dept) && mgr && mgr !== managerUsername) {
+      subManagers.push(mgr);
+    }
+  }
+
+  const visited = new Set([managerUsername]);
+  const queue   = [...new Set(subManagers)];
+  while (queue.length) {
+    const sub = queue.shift();
+    if (visited.has(sub)) continue;
+    visited.add(sub);
+    const subScope = getManagerScope(sub, db);
+    if (subScope === null) return null;
+    subScope.forEach(d => allDepts.add(d));
+    Object.entries(orgTree)
+      .filter(([, n]) => n.parentManager === sub)
+      .forEach(([u]) => { if (!visited.has(u)) queue.push(u); });
+  }
+
+  return allDepts;
+}
+
+// Check if manager manages a given user (using org tree)
+function managerManagesUser(managerUsername, targetUser, db) {
+  const scope = getManagerScope(managerUsername, db);
+  if (scope === null) return true; // sees all
+  if (scope.size === 0) return targetUser.username === managerUsername; // sees only self
+  const targetDepts = getUserDepts(targetUser);
+  return targetDepts.some(d => scope.has(d));
+}
 
 function getDepts() {
   const db = getDB();
@@ -2710,6 +2824,707 @@ document.addEventListener('click', (e) => {
 // ============================================================
 // DEPARTMENT MANAGEMENT (admin section)
 // ============================================================
+// ============================================================
+// ORG TREE UI FUNCTIONS
+// ============================================================
+
+function switchOrgTab(tab) {
+  const deptContent = document.getElementById('orgTabDeptContent');
+  const treeContent = document.getElementById('orgTabTreeContent');
+  const deptBtn     = document.getElementById('orgTabDept');
+  const treeBtn     = document.getElementById('orgTabTree');
+  if (!deptContent || !treeContent) return;
+  if (tab === 'tree') {
+    deptContent.style.display = 'none'; treeContent.style.display = '';
+    deptBtn.style.cssText  += ';border-bottom-color:transparent;color:var(--text-muted);font-weight:600;';
+    treeBtn.style.cssText  += ';border-bottom-color:var(--primary);color:var(--primary);font-weight:800;';
+    populateOrgTreeSelects(); renderOrgTree();
+  } else {
+    treeContent.style.display = 'none'; deptContent.style.display = '';
+    deptBtn.style.cssText  += ';border-bottom-color:var(--primary);color:var(--primary);font-weight:800;';
+    treeBtn.style.cssText  += ';border-bottom-color:transparent;color:var(--text-muted);font-weight:600;';
+  }
+}
+
+function populateOrgTreeSelects() {
+  const db = getDB();
+  const allUsers = Object.values(db.users)
+    .filter(u => isUserActive(u) && u.role !== 'admin')
+    .sort((a,b) => a.fullName.localeCompare(b.fullName,'he'));
+
+  const opts = allUsers.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+  const mgrSel    = document.getElementById('orgTreeManager');
+  const parentSel = document.getElementById('orgTreeParent');
+  if (mgrSel)    mgrSel.innerHTML    = '<option value="">— בחר עובד —</option>' + opts;
+  if (parentSel) parentSel.innerHTML = '<option value="">— אין מנהל מעל (שורש / מנכ"ל) —</option>' + opts;
+
+  const deptBox = document.getElementById('orgTreeDeptsCheckboxes');
+  if (deptBox) {
+    const depts = db.departments || [];
+    deptBox.innerHTML = depts.length
+      ? depts.map(d =>
+          `<label class="org-dept-chip" id="orgChip_${d.replace(/[^a-zA-Zא-ת]/g,'_')}">
+            <input type="checkbox" value="${d}"> ${d}
+          </label>`
+        ).join('')
+      : '<span style="color:var(--text-muted);font-size:12px;">אין מחלקות מוגדרות</span>';
+
+    deptBox.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.onchange = () => {
+        const label = cb.closest('label');
+        if (label) {
+          label.style.background    = cb.checked ? 'var(--primary)'      : '';
+          label.style.color         = cb.checked ? 'white'               : '';
+          label.style.borderColor   = cb.checked ? 'var(--primary-dark)' : '';
+        }
+      };
+    });
+  }
+
+  if (mgrSel) mgrSel.onchange = () => prefillOrgTreeForm();
+}
+
+function prefillOrgTreeForm() {
+  const db = getDB();
+  const orgTree      = db.orgTree      || {};
+  const deptManagers = db.deptManagers || {};
+  const username     = document.getElementById('orgTreeManager')?.value;
+  if (!username) return;
+
+  const node = orgTree[username] || {};
+  const parentSel = document.getElementById('orgTreeParent');
+  if (parentSel) parentSel.value = node.parentManager || '';
+
+  const topChk = document.getElementById('orgTreeTopLevel');
+  if (topChk) topChk.checked = !!node.topLevel;
+
+  const directDepts = node.directDepts ||
+    Object.entries(deptManagers).filter(([,mgr]) => mgr === username).map(([d]) => d);
+
+  document.querySelectorAll('#orgTreeDeptsCheckboxes input[type="checkbox"]').forEach(cb => {
+    cb.checked = directDepts.includes(cb.value);
+    const label = cb.closest('label');
+    if (label) {
+      label.style.background  = cb.checked ? 'var(--primary)'      : '';
+      label.style.color       = cb.checked ? 'white'               : '';
+      label.style.borderColor = cb.checked ? 'var(--primary-dark)' : '';
+    }
+  });
+}
+
+function saveOrgTreeEntry() {
+  const username = document.getElementById('orgTreeManager')?.value;
+  if (!username) { showToast('⚠️ בחר עובד', 'warning'); return; }
+
+  const parentManager = document.getElementById('orgTreeParent')?.value || null;
+  const topLevel      = !!document.getElementById('orgTreeTopLevel')?.checked;
+  const directDepts   = [...document.querySelectorAll('#orgTreeDeptsCheckboxes input:checked')]
+    .map(cb => cb.value);
+
+  const db = getDB();
+  if (!db.orgTree) db.orgTree = {};
+  db.orgTree[username] = { directDepts, parentManager, topLevel };
+
+  // Sync to legacy deptManagers
+  if (!db.deptManagers) db.deptManagers = {};
+  Object.keys(db.deptManagers).forEach(dept => {
+    if (db.deptManagers[dept] === username) delete db.deptManagers[dept];
+  });
+  directDepts.forEach(dept => { db.deptManagers[dept] = username; });
+
+  // Promote to manager role
+  if (db.users[username] && db.users[username].role === 'employee') {
+    db.users[username].role = 'manager';
+  }
+
+  saveDB(db); pushToFirebase().catch(() => {});
+  const name = db.users[username]?.fullName || username;
+  showToast(`✅ ${name} עודכן בעץ הארגוני`, 'success');
+  auditLog('org_tree_update', `${username}: מנהל [${directDepts.join(', ')}] | מדווח ל: ${parentManager || 'שורש'} | topLevel: ${topLevel}`);
+  renderOrgTree();
+  // Clear form
+  const mgrSel = document.getElementById('orgTreeManager');
+  if (mgrSel) mgrSel.value = '';
+  document.querySelectorAll('#orgTreeDeptsCheckboxes input').forEach(cb => {
+    cb.checked = false;
+    const l = cb.closest('label');
+    if (l) { l.style.background=''; l.style.color=''; l.style.borderColor=''; }
+  });
+}
+
+function deleteOrgTreeEntry(username) {
+  const db = getDB();
+  const name = db.users[username]?.fullName || username;
+  if (!confirm(`להסיר את ${name} מהעץ הארגוני?
+הם לא יימחקו כעובדים — רק ההגדרה הארגונית תוסר.`)) return;
+  if (db.orgTree) delete db.orgTree[username];
+  if (db.deptManagers) {
+    Object.keys(db.deptManagers).forEach(dept => {
+      if (db.deptManagers[dept] === username) delete db.deptManagers[dept];
+    });
+  }
+  // Demote to employee if they were promoted
+  if (db.users[username] && db.users[username].role === 'manager') {
+    db.users[username].role = 'employee';
+  }
+  saveDB(db); pushToFirebase().catch(() => {});
+  renderOrgTree(); renderDeptManagerTable();
+  showToast(`🗑️ ${name} הוסר מהעץ הארגוני`, 'info');
+}
+
+function renderOrgTree() {
+  const el = document.getElementById('orgTreeDisplay');
+  if (!el) return;
+  const db = getDB();
+  const orgTree      = db.orgTree      || {};
+  const deptManagers = db.deptManagers || {};
+
+  // Build unified nodes map
+  const nodes = {};
+  Object.entries(orgTree).forEach(([u, n]) => { nodes[u] = { ...n }; });
+  Object.entries(deptManagers).forEach(([dept, mgr]) => {
+    if (!nodes[mgr]) nodes[mgr] = { directDepts: [], parentManager: null };
+    if (!nodes[mgr].directDepts) nodes[mgr].directDepts = [];
+    if (!nodes[mgr].directDepts.includes(dept)) nodes[mgr].directDepts.push(dept);
+  });
+
+  if (!Object.keys(nodes).length) {
+    el.innerHTML = `<div style="background:var(--surface2);border-radius:12px;padding:24px;text-align:center;color:var(--text-muted);">
+      <div style="font-size:32px;margin-bottom:8px;">🌲</div>
+      <div style="font-weight:700;margin-bottom:6px;">העץ הארגוני ריק</div>
+      <div style="font-size:13px;">השתמש בטופס למעלה להוספת מנהלים</div>
+    </div>`;
+    return;
+  }
+
+  // Build children map
+  const children = {};
+  Object.entries(nodes).forEach(([u, n]) => {
+    if (n.parentManager) {
+      if (!children[n.parentManager]) children[n.parentManager] = [];
+      if (!children[n.parentManager].includes(u)) children[n.parentManager].push(u);
+    }
+  });
+
+  const LEVEL_ICONS  = ['🏛️','👔','👤','👤'];
+  const LEVEL_COLORS = ['var(--primary)','#7c3aed','#0891b2','#16a34a'];
+
+  function renderNode(username, depth) {
+    const user   = db.users[username];
+    const name   = user ? user.fullName : username;
+    const node   = nodes[username] || {};
+    const depts  = node.directDepts || [];
+    const scope  = getManagerScope(username, db);
+    const scopeLabel = scope === null
+      ? '👁️ כל העובדים'
+      : scope.size === 0
+        ? '👁️ עצמו בלבד'
+        : `👁️ ${scope.size} מחלקות`;
+    const color  = LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length-1)];
+    const kids   = children[username] || [];
+    const borderStyle = depth === 0
+      ? `border-right: 4px solid ${color};`
+      : `border-right: 3px solid ${color};`;
+    const marginRight = depth * 20;
+
+    const deptsHtml = depts.length
+      ? depts.map(d => `<span style="background:${color}18;color:${color};border:1px solid ${color}44;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">${d}</span>`).join('')
+      : '';
+
+    const kidsHtml = kids.length
+      ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">${kids.map(k => renderNode(k, depth+1)).join('')}</div>`
+      : '';
+
+    return `<div style="margin-right:${marginRight}px;background:var(--surface);${borderStyle}border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:1px solid var(--border);border-radius:0 10px 10px 0;padding:10px 14px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:13px;color:${color};">${LEVEL_ICONS[Math.min(depth,3)]} ${name}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${scopeLabel}${node.topLevel?' · 🔑 גישה מלאה':''}</div>
+          ${deptsHtml ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${deptsHtml}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button onclick="editOrgNode('${username}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;color:var(--text-secondary);">✏️</button>
+          <button onclick="deleteOrgTreeEntry('${username}')" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;">×</button>
+        </div>
+      </div>
+      ${kidsHtml}
+    </div>`;
+  }
+
+  const roots = Object.keys(nodes).filter(u => !nodes[u].parentManager);
+  const orphans = Object.keys(nodes).filter(u => nodes[u].parentManager && !nodes[nodes[u].parentManager]);
+  const allRoots = [...roots, ...orphans];
+
+  el.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+      <span>מבנה ארגוני</span>
+      <span style="background:var(--surface2);border-radius:8px;padding:2px 8px;">${Object.keys(nodes).length} מנהלים מוגדרים</span>
+    </div>
+    ${allRoots.map(u => renderNode(u, 0)).join('')}`;
+}
+
+function editOrgNode(username) {
+  switchOrgTab('tree');
+  setTimeout(() => {
+    const mgrSel = document.getElementById('orgTreeManager');
+    if (mgrSel) { mgrSel.value = username; prefillOrgTreeForm(); }
+    document.getElementById('orgTreeManager')?.scrollIntoView({ behavior:'smooth', block:'center' });
+  }, 100);
+}
+
+function renderDeptManagerTable() {  const deptContent = document.getElementById('orgTabDeptContent');
+  const treeContent = document.getElementById('orgTabTreeContent');
+  const deptBtn     = document.getElementById('orgTabDept');
+  const treeBtn     = document.getElementById('orgTabTree');
+  if (!deptContent || !treeContent) return;
+
+  if (tab === 'tree') {
+    deptContent.style.display = 'none';
+    treeContent.style.display = '';
+    deptBtn.style.borderBottomColor  = 'transparent';
+    deptBtn.style.color              = 'var(--text-muted)';
+    deptBtn.style.fontWeight         = '600';
+    treeBtn.style.borderBottomColor  = 'var(--primary)';
+    treeBtn.style.color              = 'var(--primary)';
+    treeBtn.style.fontWeight         = '800';
+    populateOrgTreeSelects();
+    renderOrgTree();
+  } else {
+    treeContent.style.display = 'none';
+    deptContent.style.display = '';
+    deptBtn.style.borderBottomColor  = 'var(--primary)';
+    deptBtn.style.color              = 'var(--primary)';
+    deptBtn.style.fontWeight         = '800';
+    treeBtn.style.borderBottomColor  = 'transparent';
+    treeBtn.style.color              = 'var(--text-muted)';
+    treeBtn.style.fontWeight         = '600';
+  }
+}
+
+function populateOrgTreeSelects() {
+  const db = getDB();
+  const allUsers = Object.values(db.users)
+    .filter(u => isUserActive(u) && u.role !== 'admin')
+    .sort((a,b) => a.fullName.localeCompare(b.fullName,'he'));
+
+  const mgrSel    = document.getElementById('orgTreeManager');
+  const parentSel = document.getElementById('orgTreeParent');
+  const deptBox   = document.getElementById('orgTreeDeptsCheckboxes');
+  if (!mgrSel || !parentSel || !deptBox) return;
+
+  const opts = allUsers.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+  mgrSel.innerHTML    = '<option value="">— בחר עובד —</option>' + opts;
+  parentSel.innerHTML = '<option value="">— הנהלה ראשית (אין מנהל מעל) —</option>' + opts;
+
+  // Dept checkboxes
+  const depts = db.departments || [];
+  deptBox.innerHTML = depts.map(d =>
+    `<label style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1.5px solid var(--border);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+      <input type="checkbox" value="${d}" style="accent-color:var(--primary);width:14px;height:14px;"> ${d}
+    </label>`
+  ).join('');
+
+  // Pre-fill if manager already selected
+  mgrSel.onchange = () => prefillOrgTreeForm();
+}
+
+function prefillOrgTreeForm() {
+  const db = getDB();
+  const orgTree = db.orgTree || {};
+  const deptManagers = db.deptManagers || {};
+  const username = document.getElementById('orgTreeManager').value;
+  if (!username) return;
+
+  const node = orgTree[username] || {};
+
+  // Set parent
+  const parentSel = document.getElementById('orgTreeParent');
+  if (parentSel) parentSel.value = node.parentManager || '';
+
+  // Set direct depts — from orgTree first, then fallback to deptManagers
+  const directDepts = node.directDepts || 
+    Object.entries(deptManagers).filter(([,mgr]) => mgr === username).map(([d]) => d);
+
+  const checkboxes = document.querySelectorAll('#orgTreeDeptsCheckboxes input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    cb.checked = directDepts.includes(cb.value);
+    cb.closest('label').style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+    cb.closest('label').style.color = cb.checked ? 'var(--primary-dark)' : '';
+    cb.onchange = () => {
+      cb.closest('label').style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+      cb.closest('label').style.color = cb.checked ? 'var(--primary-dark)' : '';
+    };
+  });
+}
+
+function saveOrgTreeEntry() {
+  const username = document.getElementById('orgTreeManager').value;
+  if (!username) { showToast('⚠️ בחר עובד', 'warning'); return; }
+
+  const parentManager = document.getElementById('orgTreeParent').value || null;
+  const directDepts   = [...document.querySelectorAll('#orgTreeDeptsCheckboxes input:checked')]
+    .map(cb => cb.value);
+
+  const db = getDB();
+  if (!db.orgTree) db.orgTree = {};
+
+  db.orgTree[username] = { directDepts, parentManager };
+
+  // Also sync to legacy deptManagers for backwards compat
+  if (!db.deptManagers) db.deptManagers = {};
+  // Remove old assignments for this manager
+  Object.keys(db.deptManagers).forEach(dept => {
+    if (db.deptManagers[dept] === username) delete db.deptManagers[dept];
+  });
+  // Set new direct dept assignments
+  directDepts.forEach(dept => { db.deptManagers[dept] = username; });
+
+  // Set role to manager if not already
+  if (db.users[username] && db.users[username].role === 'employee') {
+    db.users[username].role = 'manager';
+  }
+
+  saveDB(db);
+  pushToFirebase().catch(() => {});
+  showToast(`✅ ${db.users[username]?.fullName || username} עודכן בעץ הארגוני`, 'success');
+  auditLog('org_tree_update', `עץ ארגוני: ${username} → מנהל ${directDepts.join(', ')} | מדווח ל: ${parentManager || 'הנהלה ראשית'}`);
+  renderOrgTree();
+}
+
+function deleteOrgTreeEntry(username) {
+  if (!confirm('להסיר את המנהל מהעץ הארגוני?')) return;
+  const db = getDB();
+  if (db.orgTree) delete db.orgTree[username];
+  // Remove legacy deptManagers
+  if (db.deptManagers) {
+    Object.keys(db.deptManagers).forEach(dept => {
+      if (db.deptManagers[dept] === username) delete db.deptManagers[dept];
+    });
+  }
+  saveDB(db);
+  pushToFirebase().catch(() => {});
+  renderOrgTree();
+  showToast('🗑️ הוסר מהעץ הארגוני', 'info');
+}
+
+function renderOrgTree() {
+  const el = document.getElementById('orgTreeDisplay');
+  if (!el) return;
+  const db = getDB();
+  const orgTree = db.orgTree || {};
+  const deptManagers = db.deptManagers || {};
+
+  // Build unified map: username → { directDepts, parentManager }
+  const nodes = {};
+
+  // From orgTree
+  Object.entries(orgTree).forEach(([uname, node]) => {
+    nodes[uname] = { ...node };
+  });
+
+  // From legacy deptManagers (those not in orgTree)
+  Object.entries(deptManagers).forEach(([dept, mgr]) => {
+    if (!nodes[mgr]) nodes[mgr] = { directDepts: [], parentManager: null };
+    if (!nodes[mgr].directDepts.includes(dept)) nodes[mgr].directDepts.push(dept);
+  });
+
+  if (!Object.keys(nodes).length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">אין עץ ארגוני מוגדר עדיין. הגדר מנהלים למעלה.</div>';
+    return;
+  }
+
+  // Render as visual tree — group by parentManager
+  const roots = Object.entries(nodes).filter(([, n]) => !n.parentManager);
+  const children = {}; // parentManager → [username]
+  Object.entries(nodes).forEach(([uname, n]) => {
+    if (n.parentManager) {
+      if (!children[n.parentManager]) children[n.parentManager] = [];
+      children[n.parentManager].push(uname);
+    }
+  });
+
+  function renderNode(username, depth) {
+    const user = db.users[username];
+    const name = user ? user.fullName : username;
+    const node = nodes[username] || {};
+    const depts = node.directDepts || [];
+    const scope = getManagerScope(username, db);
+    const scopeSize = scope === null ? 'כל העובדים' : `${scope.size} מחלקות`;
+    const indent = depth * 24;
+    const kids = children[username] || [];
+
+    const deptsHtml = depts.length
+      ? depts.map(d => `<span style="background:var(--primary-light);color:var(--primary-dark);border-radius:12px;padding:2px 10px;font-size:11px;font-weight:700;">${d}</span>`).join(' ')
+      : '<span style="color:var(--text-muted);font-size:11px;">ללא מחלקות ישירות</span>';
+
+    return `
+      <div style="margin-right:${indent}px;background:var(--surface);border:1.5px solid ${depth===0?'var(--primary)':'var(--border)'};border-radius:12px;padding:12px 16px;margin-bottom:8px;position:relative;">
+        ${depth > 0 ? `<div style="position:absolute;right:${-indent}px;top:50%;width:${indent-4}px;height:1px;background:var(--border);transform:translateY(-50%);pointer-events:none;"></div>` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:800;font-size:14px;">${depth===0?'🏛️':depth===1?'👔':'👤'} ${name}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">רמה ${depth+1} · רואה: ${scopeSize}</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${deptsHtml}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button onclick="editOrgNode('${username}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:'Heebo',sans-serif;">✏️ ערוך</button>
+            <button onclick="deleteOrgTreeEntry('${username}')" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:'Heebo',sans-serif;">×</button>
+          </div>
+        </div>
+        ${kids.map(k => renderNode(k, depth+1)).join('')}
+      </div>`;
+  }
+
+  el.innerHTML = roots.length
+    ? roots.map(([uname]) => renderNode(uname, 0)).join('')
+    : `<div style="color:var(--text-muted);font-size:13px;">כל המנהלים מוגדרים ללא מדרג. בחר "מדווח ל" כדי לבנות היררכיה.</div>` +
+      Object.keys(nodes).map(uname => renderNode(uname, 0)).join('');
+}
+
+function switchOrgTab(tab) {
+  const deptContent = document.getElementById('orgTabDeptContent');
+  const treeContent = document.getElementById('orgTabTreeContent');
+  const deptBtn     = document.getElementById('orgTabDept');
+  const treeBtn     = document.getElementById('orgTabTree');
+  if (!deptContent || !treeContent) return;
+  if (tab === 'tree') {
+    deptContent.style.display = 'none'; treeContent.style.display = '';
+    deptBtn.style.cssText  += ';border-bottom-color:transparent;color:var(--text-muted);font-weight:600;';
+    treeBtn.style.cssText  += ';border-bottom-color:var(--primary);color:var(--primary);font-weight:800;';
+    populateOrgTreeSelects(); renderOrgTree();
+  } else {
+    treeContent.style.display = 'none'; deptContent.style.display = '';
+    deptBtn.style.cssText  += ';border-bottom-color:var(--primary);color:var(--primary);font-weight:800;';
+    treeBtn.style.cssText  += ';border-bottom-color:transparent;color:var(--text-muted);font-weight:600;';
+  }
+}
+
+function populateOrgTreeSelects() {
+  const db = getDB();
+  const allUsers = Object.values(db.users)
+    .filter(u => isUserActive(u) && u.role !== 'admin')
+    .sort((a,b) => a.fullName.localeCompare(b.fullName,'he'));
+
+  const opts = allUsers.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+  const mgrSel    = document.getElementById('orgTreeManager');
+  const parentSel = document.getElementById('orgTreeParent');
+  if (mgrSel)    mgrSel.innerHTML    = '<option value="">— בחר עובד —</option>' + opts;
+  if (parentSel) parentSel.innerHTML = '<option value="">— אין מנהל מעל (שורש / מנכ"ל) —</option>' + opts;
+
+  const deptBox = document.getElementById('orgTreeDeptsCheckboxes');
+  if (deptBox) {
+    const depts = db.departments || [];
+    deptBox.innerHTML = depts.length
+      ? depts.map(d =>
+          `<label class="org-dept-chip" id="orgChip_${d.replace(/[^a-zA-Zא-ת]/g,'_')}">
+            <input type="checkbox" value="${d}"> ${d}
+          </label>`
+        ).join('')
+      : '<span style="color:var(--text-muted);font-size:12px;">אין מחלקות מוגדרות</span>';
+
+    deptBox.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.onchange = () => {
+        const label = cb.closest('label');
+        if (label) {
+          label.style.background    = cb.checked ? 'var(--primary)'      : '';
+          label.style.color         = cb.checked ? 'white'               : '';
+          label.style.borderColor   = cb.checked ? 'var(--primary-dark)' : '';
+        }
+      };
+    });
+  }
+
+  if (mgrSel) mgrSel.onchange = () => prefillOrgTreeForm();
+}
+
+function prefillOrgTreeForm() {
+  const db = getDB();
+  const orgTree      = db.orgTree      || {};
+  const deptManagers = db.deptManagers || {};
+  const username     = document.getElementById('orgTreeManager')?.value;
+  if (!username) return;
+
+  const node = orgTree[username] || {};
+  const parentSel = document.getElementById('orgTreeParent');
+  if (parentSel) parentSel.value = node.parentManager || '';
+
+  const topChk = document.getElementById('orgTreeTopLevel');
+  if (topChk) topChk.checked = !!node.topLevel;
+
+  const directDepts = node.directDepts ||
+    Object.entries(deptManagers).filter(([,mgr]) => mgr === username).map(([d]) => d);
+
+  document.querySelectorAll('#orgTreeDeptsCheckboxes input[type="checkbox"]').forEach(cb => {
+    cb.checked = directDepts.includes(cb.value);
+    const label = cb.closest('label');
+    if (label) {
+      label.style.background  = cb.checked ? 'var(--primary)'      : '';
+      label.style.color       = cb.checked ? 'white'               : '';
+      label.style.borderColor = cb.checked ? 'var(--primary-dark)' : '';
+    }
+  });
+}
+
+function saveOrgTreeEntry() {
+  const username = document.getElementById('orgTreeManager')?.value;
+  if (!username) { showToast('⚠️ בחר עובד', 'warning'); return; }
+
+  const parentManager = document.getElementById('orgTreeParent')?.value || null;
+  const topLevel      = !!document.getElementById('orgTreeTopLevel')?.checked;
+  const directDepts   = [...document.querySelectorAll('#orgTreeDeptsCheckboxes input:checked')]
+    .map(cb => cb.value);
+
+  const db = getDB();
+  if (!db.orgTree) db.orgTree = {};
+  db.orgTree[username] = { directDepts, parentManager, topLevel };
+
+  // Sync to legacy deptManagers
+  if (!db.deptManagers) db.deptManagers = {};
+  Object.keys(db.deptManagers).forEach(dept => {
+    if (db.deptManagers[dept] === username) delete db.deptManagers[dept];
+  });
+  directDepts.forEach(dept => { db.deptManagers[dept] = username; });
+
+  // Promote to manager role
+  if (db.users[username] && db.users[username].role === 'employee') {
+    db.users[username].role = 'manager';
+  }
+
+  saveDB(db); pushToFirebase().catch(() => {});
+  const name = db.users[username]?.fullName || username;
+  showToast(`✅ ${name} עודכן בעץ הארגוני`, 'success');
+  auditLog('org_tree_update', `${username}: מנהל [${directDepts.join(', ')}] | מדווח ל: ${parentManager || 'שורש'} | topLevel: ${topLevel}`);
+  renderOrgTree();
+  // Clear form
+  const mgrSel = document.getElementById('orgTreeManager');
+  if (mgrSel) mgrSel.value = '';
+  document.querySelectorAll('#orgTreeDeptsCheckboxes input').forEach(cb => {
+    cb.checked = false;
+    const l = cb.closest('label');
+    if (l) { l.style.background=''; l.style.color=''; l.style.borderColor=''; }
+  });
+}
+
+function deleteOrgTreeEntry(username) {
+  const db = getDB();
+  const name = db.users[username]?.fullName || username;
+  if (!confirm(`להסיר את ${name} מהעץ הארגוני?
+הם לא יימחקו כעובדים — רק ההגדרה הארגונית תוסר.`)) return;
+  if (db.orgTree) delete db.orgTree[username];
+  if (db.deptManagers) {
+    Object.keys(db.deptManagers).forEach(dept => {
+      if (db.deptManagers[dept] === username) delete db.deptManagers[dept];
+    });
+  }
+  // Demote to employee if they were promoted
+  if (db.users[username] && db.users[username].role === 'manager') {
+    db.users[username].role = 'employee';
+  }
+  saveDB(db); pushToFirebase().catch(() => {});
+  renderOrgTree(); renderDeptManagerTable();
+  showToast(`🗑️ ${name} הוסר מהעץ הארגוני`, 'info');
+}
+
+function renderOrgTree() {
+  const el = document.getElementById('orgTreeDisplay');
+  if (!el) return;
+  const db = getDB();
+  const orgTree      = db.orgTree      || {};
+  const deptManagers = db.deptManagers || {};
+
+  // Build unified nodes map
+  const nodes = {};
+  Object.entries(orgTree).forEach(([u, n]) => { nodes[u] = { ...n }; });
+  Object.entries(deptManagers).forEach(([dept, mgr]) => {
+    if (!nodes[mgr]) nodes[mgr] = { directDepts: [], parentManager: null };
+    if (!nodes[mgr].directDepts) nodes[mgr].directDepts = [];
+    if (!nodes[mgr].directDepts.includes(dept)) nodes[mgr].directDepts.push(dept);
+  });
+
+  if (!Object.keys(nodes).length) {
+    el.innerHTML = `<div style="background:var(--surface2);border-radius:12px;padding:24px;text-align:center;color:var(--text-muted);">
+      <div style="font-size:32px;margin-bottom:8px;">🌲</div>
+      <div style="font-weight:700;margin-bottom:6px;">העץ הארגוני ריק</div>
+      <div style="font-size:13px;">השתמש בטופס למעלה להוספת מנהלים</div>
+    </div>`;
+    return;
+  }
+
+  // Build children map
+  const children = {};
+  Object.entries(nodes).forEach(([u, n]) => {
+    if (n.parentManager) {
+      if (!children[n.parentManager]) children[n.parentManager] = [];
+      if (!children[n.parentManager].includes(u)) children[n.parentManager].push(u);
+    }
+  });
+
+  const LEVEL_ICONS  = ['🏛️','👔','👤','👤'];
+  const LEVEL_COLORS = ['var(--primary)','#7c3aed','#0891b2','#16a34a'];
+
+  function renderNode(username, depth) {
+    const user   = db.users[username];
+    const name   = user ? user.fullName : username;
+    const node   = nodes[username] || {};
+    const depts  = node.directDepts || [];
+    const scope  = getManagerScope(username, db);
+    const scopeLabel = scope === null
+      ? '👁️ כל העובדים'
+      : scope.size === 0
+        ? '👁️ עצמו בלבד'
+        : `👁️ ${scope.size} מחלקות`;
+    const color  = LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length-1)];
+    const kids   = children[username] || [];
+    const borderStyle = depth === 0
+      ? `border-right: 4px solid ${color};`
+      : `border-right: 3px solid ${color};`;
+    const marginRight = depth * 20;
+
+    const deptsHtml = depts.length
+      ? depts.map(d => `<span style="background:${color}18;color:${color};border:1px solid ${color}44;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">${d}</span>`).join('')
+      : '';
+
+    const kidsHtml = kids.length
+      ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">${kids.map(k => renderNode(k, depth+1)).join('')}</div>`
+      : '';
+
+    return `<div style="margin-right:${marginRight}px;background:var(--surface);${borderStyle}border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:1px solid var(--border);border-radius:0 10px 10px 0;padding:10px 14px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:13px;color:${color};">${LEVEL_ICONS[Math.min(depth,3)]} ${name}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${scopeLabel}${node.topLevel?' · 🔑 גישה מלאה':''}</div>
+          ${deptsHtml ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${deptsHtml}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button onclick="editOrgNode('${username}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;color:var(--text-secondary);">✏️</button>
+          <button onclick="deleteOrgTreeEntry('${username}')" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;">×</button>
+        </div>
+      </div>
+      ${kidsHtml}
+    </div>`;
+  }
+
+  const roots = Object.keys(nodes).filter(u => !nodes[u].parentManager);
+  const orphans = Object.keys(nodes).filter(u => nodes[u].parentManager && !nodes[nodes[u].parentManager]);
+  const allRoots = [...roots, ...orphans];
+
+  el.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+      <span>מבנה ארגוני</span>
+      <span style="background:var(--surface2);border-radius:8px;padding:2px 8px;">${Object.keys(nodes).length} מנהלים מוגדרים</span>
+    </div>
+    ${allRoots.map(u => renderNode(u, 0)).join('')}`;
+}
+
+function editOrgNode(username) {
+  switchOrgTab('tree');
+  setTimeout(() => {
+    const mgrSel = document.getElementById('orgTreeManager');
+    if (mgrSel) { mgrSel.value = username; prefillOrgTreeForm(); }
+    document.getElementById('orgTreeManager')?.scrollIntoView({ behavior:'smooth', block:'center' });
+  }, 100);
+}
+
 function renderDeptManagerTable() {
   const db = getDB();
   const depts = db.departments || [];
@@ -3138,10 +3953,13 @@ function doResetPassword() {
     return;
   }
   const db = getDB();
-  db.users[passwordTargetUser].password = hashPass(newPass);
-  saveDB(db);
-  closeModal('resetPasswordModal');
-  showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} אופסה בהצלחה`, 'success');
+  _sha256(newPass).then(hash => {
+    db.users[passwordTargetUser].password = hash;
+    db.users[passwordTargetUser].mustChangePassword = true;
+    saveDB(db);
+    closeModal('resetPasswordModal');
+    showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} אופסה — יידרש שינוי בכניסה`, 'success');
+  });
 }
 
 function openChangePasswordModal(username) {
@@ -3167,35 +3985,30 @@ function doChangeEmpPassword() {
     return;
   }
   const db = getDB();
-  db.users[passwordTargetUser].password = hashPass(p1);
-  saveDB(db);
-  closeModal('changeEmpPasswordModal');
-  showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} שונתה בהצלחה`, 'success');
+  _sha256(p1).then(hash => {
+    db.users[passwordTargetUser].password = hash;
+    saveDB(db);
+    closeModal('changeEmpPasswordModal');
+    showToast(`✅ סיסמת ${db.users[passwordTargetUser].fullName} שונתה בהצלחה`, 'success');
+  });
 }
 
-function changeAdminPassword() {
+async function changeAdminPassword() {
   const current = document.getElementById('adminCurrentPass').value;
   const newP = document.getElementById('adminNewPass').value;
   const newP2 = document.getElementById('adminNewPass2').value;
-  
   const db = getDB();
   const adminUser = db.users['admin'];
   if (!adminUser) { showToast('⚠️ משתמש admin לא נמצא', 'warning'); return; }
-  
-  if (adminUser.password !== hashPass(current)) {
-    showToast('❌ הסיסמה הנוכחית שגויה', 'error');
-    return;
+  if (!newP || newP.length < 4) { showToast('⚠️ הסיסמה חייבת להיות לפחות 4 תווים', 'warning'); return; }
+  if (newP !== newP2) { showToast('⚠️ הסיסמאות אינן תואמות', 'warning'); return; }
+  const _legHash = p => { let h=0; for(let i=0;i<p.length;i++){h=((h<<5)-h)+p.charCodeAt(i);h=h&h;} return 'h'+Math.abs(h).toString(36)+p.length; };
+  const sha256cur = await _sha256(current);
+  if (adminUser.password !== sha256cur && adminUser.password !== _legHash(current)) {
+    showToast('❌ הסיסמה הנוכחית שגויה', 'error'); return;
   }
-  if (!newP || newP.length < 4) {
-    showToast('⚠️ הסיסמה חייבת להיות לפחות 4 תווים', 'warning');
-    return;
-  }
-  if (newP !== newP2) {
-    showToast('⚠️ הסיסמאות אינן תואמות', 'warning');
-    return;
-  }
-  
-  db.users['admin'].password = hashPass(newP);
+  const newHash = await _sha256(newP);
+  db.users['admin'].password = newHash;
   saveDB(db);
   document.getElementById('adminCurrentPass').value = '';
   document.getElementById('adminNewPass').value = '';
@@ -3385,7 +4198,7 @@ function renderPermissionsTable() {
             <tr style="border-bottom:1px solid var(--border);" id="permRow_${u.username}">
               <td style="padding:10px 12px;">
                 <div style="font-weight:700;">${u.fullName}</div>
-                <div style="font-size:11px;color:var(--text-muted);">${u.role === 'manager' ? '👔 מנהל' : '👤 עובד'} · ${Array.isArray(u.dept) ? u.dept[0] : u.dept || ''}</div>
+                <div style="font-size:11px;color:var(--text-muted);">${u.role === 'manager' ? '👔 מנהל' : '👤 עובד'} · ${getUserDept(u) || ''}</div>
               </td>
               <td style="padding:10px 8px;text-align:center;">
                 <span style="font-size:11px;padding:3px 8px;border-radius:10px;font-weight:700;background:${hasAny ? 'var(--success-light)' : 'var(--surface2)'};color:${hasAny ? 'var(--success)' : 'var(--text-muted)'};">
@@ -3455,6 +4268,7 @@ function populateQuickPermUser() {
 
 
 function onPermCheckChange(username) {
+  const row = document.getElementById('permRow_' + username);
   if (row) row.style.background = 'var(--warning-light)';
 }
 
@@ -4098,7 +4912,7 @@ function renderWhereIsResults() {
 
   container.innerHTML = users.map(u => {
     const s = getEmployeeStatusToday(u.username);
-    const dept = Array.isArray(u.dept) ? u.dept[0] : u.dept || '';
+    const dept = getUserDept(u) || '';
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:${s.bg};border-radius:12px;border:1px solid ${s.color}22;">
       <div style="width:38px;height:38px;border-radius:50%;background:${s.color}22;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${s.label.split(' ')[0]}</div>
       <div style="flex:1;min-width:0;">
@@ -4564,7 +5378,7 @@ function deleteImportedEmployees() {
   // Remove departments that are now empty
   const remainingDepts = new Set(
     Object.values(db.users)
-      .map(u => Array.isArray(u.dept) ? u.dept[0] : u.dept)
+      .map(u => getUserDept(u))
       .filter(Boolean)
   );
   const deptsBefore = (db.departments || []).length;
@@ -4630,22 +5444,21 @@ function doForcePasswordChange() {
   }
 
   const db = getDB();
-  db.users[currentUser.username].password = hashPass(pass);
-  db.users[currentUser.username].mustChangePassword = false;
-  saveDB(db);
-  currentUser = db.users[currentUser.username];
-
   const savedUsername = currentUser.username;
-  auditLog('force_pass_change', `${savedUsername} שינה סיסמה זמנית`);
-  pushToFirebase();
-  currentUser = null;
-  document.getElementById('forcePasswordScreen').classList.remove('active');
-  showToast('✅ סיסמה עודכנה! התחבר עם הסיסמה החדשה.', 'success');
-  // Return to login screen
-  document.getElementById('loginScreen').classList.add('active');
-  document.getElementById('loginUsername').value = savedUsername;
-  document.getElementById('loginPassword').value = '';
-  try { document.getElementById('loginError').style.display = 'none'; } catch(e) {}
+  _sha256(pass).then(sha256hash => {
+    db.users[savedUsername].password = sha256hash;
+    db.users[savedUsername].mustChangePassword = false;
+    saveDB(db);
+    auditLog('force_pass_change', `${savedUsername} שינה סיסמה זמנית`);
+    pushToFirebase();
+    currentUser = null;
+    document.getElementById('forcePasswordScreen').classList.remove('active');
+    showToast('✅ סיסמה עודכנה! התחבר עם הסיסמה החדשה.', 'success');
+    document.getElementById('loginScreen').classList.add('active');
+    document.getElementById('loginUsername').value = savedUsername;
+    document.getElementById('loginPassword').value = '';
+    try { document.getElementById('loginError').style.display = 'none'; } catch(e) {}
+  });
 }
 
 
@@ -4805,7 +5618,11 @@ function renderAIStaffingForecast() {
   if (!el) return;
   const db  = getDB();
   const today = new Date();
-  const depts = db.departments || [];
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'accountant';
+  // Scope depts to what this manager manages
+  const myManagedDepts = isAdmin ? null : Object.entries(db.deptManagers || {})
+    .filter(([, mgr]) => mgr === currentUser.username).map(([dept]) => dept);
+  const depts = (db.departments || []).filter(d => !myManagedDepts || myManagedDepts.length === 0 || myManagedDepts.includes(d));
 
   // Build next 8 weeks map: week → dept → count absent
   const weeks = [];
@@ -4829,8 +5646,8 @@ function renderAIStaffingForecast() {
     const deptCounts = {};
     depts.forEach(dept => {
       const deptUsers = Object.values(db.users).filter(u => {
-        const d = Array.isArray(u.dept) ? u.dept[0] : u.dept;
-        return d === dept && u.role !== 'admin';
+        const d = getUserDept(u);
+        return d === dept && u.role !== 'admin' && isUserActive(u);
       });
       if (!deptUsers.length) return;
       let maxAbsent = 0;
@@ -4911,7 +5728,12 @@ function renderEmployeeScores() {
   if (!el) return;
   const db = getDB();
   const year = new Date().getFullYear();
-  const users = Object.values(db.users).filter(u => u.role !== 'admin' && u.role !== 'accountant' && isUserActive(u));
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'accountant';
+  const users = Object.values(db.users).filter(u => {
+    if (!isUserActive(u) || u.role === 'admin' || u.role === 'accountant') return false;
+    if (isAdmin) return true;
+    return managerManagesUser(currentUser.username, u, db);
+  });
 
   const scores = users.map(u => {
     const vacs   = db.vacations[u.username] || {};
@@ -4968,7 +5790,7 @@ function renderEmployeeScores() {
 // ============================================================
 
 function showModuleSelector() {
-  ['loginScreen','appScreen','timeClockScreen','ceoDashboardScreen'].forEach(id => {
+  ['loginScreen','appScreen','timeClockScreen','ceoDashboardScreen','forcePasswordScreen','pendingApprovalScreen'].forEach(id => {
     document.getElementById(id)?.classList.remove('active');
   });
 
@@ -5026,18 +5848,19 @@ function showModuleSelector() {
 
 // Open AI panel from module selector
 function openAIFromSelector() {
-  _aiPanelOpen = false; // reset state
   const panel = document.getElementById('aiPanel');
-  if (panel) {
-    panel.classList.add('open');
-    _aiPanelOpen = true;
-    // Reset chat to welcome state
-    const messages = document.getElementById('aiMessages');
-    if (messages) {
-      messages.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI.<br>שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
-    }
-    setTimeout(() => { document.getElementById('aiInput')?.focus(); }, 300);
+  if (!panel) return;
+  _aiPanelOpen = true;
+  panel.classList.add('open');
+  // Only show welcome if chat is empty (first open)
+  const messages = document.getElementById('aiMessages');
+  if (messages && !messages.querySelector('.ai-msg')) {
+    messages.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שלום! אני Dazura AI.<br>שאל אותי כל שאלה הקשורה לחופשות, נוכחות ומידע ארגוני.</p></div>';
   }
+  setTimeout(() => {
+    document.getElementById('aiInput')?.focus();
+    scrollAIToBottom();
+  }, 300);
 }
 
 function enterModule(module) {
@@ -5414,7 +6237,7 @@ function suggestNextVacation(vacs, db, year) {
   const today = new Date();
   const dept = Array.isArray(currentUser.dept) ? currentUser.dept[0] : currentUser.dept;
   const deptUsers = Object.values(db.users).filter(u => {
-    const d = Array.isArray(u.dept) ? u.dept[0] : u.dept;
+    const d = getUserDept(u);
     return d === dept && u.username !== currentUser.username;
   });
   let bestWeek = null, bestScore = 999;
@@ -5518,12 +6341,14 @@ function forgotSetNewPassword() {
 
   const db = getDB();
   if (!db.users[_forgotUser]) { errEl.textContent = 'שגיאה — נסה שוב'; errEl.style.display = 'block'; return; }
-  db.users[_forgotUser].password = hashPass(p1);
-  saveDB(db);
-  closeModal('forgotStep1Modal');
-  showToast('✅ הסיסמה סונכרנה בהצלחה — כעת תוכל להיכנס', 'success', 5000);
-  auditLog('password_reset_synced', `${_forgotUser} סינכרן סיסמה חדשה`);
-  _forgotUser = null;
+  _sha256(p1).then(hash => {
+    db.users[_forgotUser].password = hash;
+    saveDB(db);
+    closeModal('forgotStep1Modal');
+    showToast('✅ הסיסמה סונכרנה בהצלחה — כעת תוכל להיכנס', 'success', 5000);
+    auditLog('password_reset_synced', `${_forgotUser} סינכרן סיסמה חדשה`);
+    _forgotUser = null;
+  });
 }
 
 // --- Change password (logged in) ---
@@ -5544,20 +6369,21 @@ function doChangePassword() {
   errEl.style.display = 'none';
   const db = getDB();
   const user = db.users[currentUser.username];
-  if (user.password !== hashPass(current)) {
-    errEl.textContent = 'הסיסמה הנוכחית שגויה'; errEl.style.display = 'block'; return;
-  }
-  if (newPass.length < 4) {
-    errEl.textContent = 'הסיסמה החדשה חייבת להיות לפחות 4 תווים'; errEl.style.display = 'block'; return;
-  }
-  if (newPass !== newPass2) {
-    errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.style.display = 'block'; return;
-  }
-  user.password = hashPass(newPass);
-  saveDB(db);
-  closeModal('changePasswordModal');
-  auditLog('password_change', `${currentUser.username} שינה סיסמה`);
-  showToast('✅ הסיסמה עודכנה בהצלחה', 'success');
+  if (newPass.length < 4) { errEl.textContent = 'הסיסמה החדשה חייבת להיות לפחות 4 תווים'; errEl.style.display = 'block'; return; }
+  if (newPass !== newPass2) { errEl.textContent = 'הסיסמאות אינן תואמות'; errEl.style.display = 'block'; return; }
+  const _legHash2 = p => { let h=0; for(let i=0;i<p.length;i++){h=((h<<5)-h)+p.charCodeAt(i);h=h&h;} return 'h'+Math.abs(h).toString(36)+p.length; };
+  _sha256(current).then(sha256cur => {
+    if (user.password !== sha256cur && user.password !== _legHash2(current)) {
+      errEl.textContent = 'הסיסמה הנוכחית שגויה'; errEl.style.display = 'block'; return;
+    }
+    _sha256(newPass).then(newHash => {
+      user.password = newHash;
+      saveDB(db);
+      closeModal('changePasswordModal');
+      auditLog('password_change', `${currentUser.username} שינה סיסמה`);
+      showToast('✅ הסיסמה עודכנה בהצלחה', 'success');
+    });
+  });
 }
 
 
@@ -5620,6 +6446,8 @@ async function pullFromFirebase() {
         handovers:        JSON.parse(data.handovers        || '{}'),
         handoversArchive: JSON.parse(data.handoversArchive || '{}'),
         handoverPending:  JSON.parse(data.handoverPending  || '{}'),
+        orgTree:          JSON.parse(data.orgTree          || '{}'),
+        timeClockRecords: JSON.parse(data.timeClockRecords || '{}'),
       };
       // Always guarantee admin exists even if Firebase was wiped
       ensureAdminExists(cloudDB);
@@ -5658,6 +6486,8 @@ async function pushToFirebase() {
       handovers:        JSON.stringify(db.handovers || {}),
       handoversArchive: JSON.stringify(db.handoversArchive || {}),
       handoverPending:  JSON.stringify(db.handoverPending || {}),
+      orgTree:          JSON.stringify(db.orgTree || {}),
+      timeClockRecords: JSON.stringify(db.timeClockRecords || {}),
       updatedAt:        new Date().toISOString(),
       updatedBy:        currentUser?.username || 'system'
     });
@@ -5996,6 +6826,34 @@ async function resetLocalData() {
   setTimeout(() => location.reload(), 1500);
 }
 
+function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!confirm('⚠️ שחזור גיבוי יחליף את כל הנתונים הקיימים.\n\nהאם להמשיך?')) {
+    input.value = ''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data || typeof data !== 'object' || !data.users) {
+        showToast('❌ קובץ לא תקין — חסר מידע עובדים', 'error'); return;
+      }
+      const curDB = getDB();
+      if (!data.users.admin && curDB.users.admin) data.users.admin = curDB.users.admin;
+      _saveDBLocal(data);
+      pushToFirebase().catch(() => {});
+      auditLog('backup_restored', 'גיבוי שוחזר מקובץ: ' + file.name);
+      showToast('✅ גיבוי שוחזר בהצלחה — טוען מחדש...', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } catch(err) {
+      showToast('❌ שגיאה בקריאת הקובץ: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+  input.value = '';
+}
+
 function exportBackup() {
   const db = getDB();
   const json = JSON.stringify(db, null, 2);
@@ -6094,7 +6952,7 @@ function renderSelectedEmployee() {
   if (!u) return;
   _currentEditEmp = username;
 
-  const cb = calcBalance(username, 2026);
+  const cb = calcBalance(username, new Date().getFullYear());
   const roleLabel = u.role === 'admin' ? '🛡️ מנהל' : u.role === 'accountant' ? '💼 חשבות' : '👤 עובד';
   const roleBadge = u.role === 'admin' ? 'badge-admin' : u.role === 'accountant' ? 'badge-accountant' : 'badge-user';
 
@@ -6329,488 +7187,125 @@ window.addEventListener('load', function() {
 });
 
 
-// ============================================================
-// AI PANEL FUNCTIONS
-// ============================================================
-let _aiPanelOpen = false;
-
-function toggleAIPanel() {
-  const panel = document.getElementById('aiPanel');
-  const btn   = document.getElementById('aiFloatBtn');
-  if (!panel) return;
-  _aiPanelOpen = !_aiPanelOpen;
-  panel.classList.toggle('open', _aiPanelOpen);
-  if (_aiPanelOpen) {
-    setTimeout(() => { document.getElementById('aiInput')?.focus(); }, 300);
-    scrollAIToBottom();
-  }
-}
-
-async function sendAIMessage() {
-  const input = document.getElementById('aiInput');
-  const msg = input?.value.trim();
-  if (!msg) return;
-  if (!currentUser) { showToast('⚠️ יש להתחבר כדי להשתמש ב-AI', 'warning'); return; }
-
-  input.value = '';
-
-  const messages = document.getElementById('aiMessages');
-  if (messages) messages.innerHTML = '';
-
-  appendAIMessage(msg, 'user');
-  showAITyping();
-
-  const delay = 350 + Math.random() * 300;
-
-  try {
-    const db = getDB();
-    const freshUser = (db.users && db.users[currentUser.username]) ? db.users[currentUser.username] : currentUser;
-
-    if (typeof DazuraFuse !== 'undefined') {
-      // DazuraFuse: קודם AI מקומי, אחר כך Claude API אם צריך
-      const resp = await DazuraFuse.respondAsync(msg, freshUser, db);
-      setTimeout(() => {
-        hideAITyping();
-        appendAIMessage(resp, 'ai');
-        scrollAIToBottom();
-      }, delay);
-    } else {
-      // Fallback ל-DazuraAI בלבד
-      setTimeout(() => {
-        hideAITyping();
-        let response;
-        try {
-          response = DazuraAI.respond(msg, freshUser, db);
-        } catch(e) {
-          response = 'אירעה שגיאה בעיבוד השאלה. נסה שוב.';
-        }
-        appendAIMessage(response, 'ai');
-        scrollAIToBottom();
-      }, delay);
-    }
-  } catch(e) {
-    setTimeout(() => {
-      hideAITyping();
-      appendAIMessage('אירעה שגיאה. נסה שוב.', 'ai');
-    }, delay);
-  }
-}
-
-function appendAIMessage(text, role) {
-  const messages = document.getElementById('aiMessages');
-  if (!messages) return;
-
-  const div = document.createElement('div');
-  div.className = 'ai-msg ' + role;
-  const bubble = document.createElement('div');
-  bubble.className = 'ai-msg-bubble';
-
-  // Safe HTML render: bold + bullets + newlines
-  const safe = text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
-  bubble.innerHTML = safe;
-
-  div.appendChild(bubble);
-  messages.appendChild(div);
-  scrollAIToBottom();
-}
-
-let _typingEl = null;
-function showAITyping() {
-  const messages = document.getElementById('aiMessages');
-  if (!messages) return;
-  _typingEl = document.createElement('div');
-  _typingEl.className = 'ai-msg ai';
-  _typingEl.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
-  messages.appendChild(_typingEl);
-  scrollAIToBottom();
-}
-function hideAITyping() {
-  if (_typingEl) { _typingEl.remove(); _typingEl = null; }
-}
-
-function scrollAIToBottom() {
-  const messages = document.getElementById('aiMessages');
-  if (messages) messages.scrollTop = messages.scrollHeight;
-}
-
-function clearAIChat() {
-  const messages = document.getElementById('aiMessages');
-  if (messages) {
-    messages.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שיחה חדשה. שאל אותי כל שאלה!</p></div>';
-  }
-  if (typeof DazuraAI !== 'undefined') DazuraAI.clearHistory();
-  if (typeof DazuraFuse !== 'undefined') DazuraFuse.clearHistory();
-}
-
-// Show AI button after login
-function showAIButton() {
-  const btn = document.getElementById('aiFloatBtn');
-  if (btn) btn.style.display = '';
-}
-function hideAIButton() {
-  const btn = document.getElementById('aiFloatBtn');
-  if (btn) btn.style.display = 'none';
-  const panel = document.getElementById('aiPanel');
-  if (panel) panel.classList.remove('open');
-  _aiPanelOpen = false;
-}
-
-// ============================================================
-// SPLASH SETTINGS (ADMIN)
-// ============================================================
-let _selectedSplash = 1;
-function selectSplash(n) {
-  _selectedSplash = n;
-  document.querySelectorAll('.splash-option').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.splash) === n);
-  });
-}
-function openSplashSelector() {
-  const db = getDB();
-  const saved = db.settings?.splashTheme || 1;
-  _selectedSplash = saved;
-  const timing = db.settings?.splashTiming || 2;
-  const inp = document.getElementById('splashTimingInput');
-  const val = document.getElementById('splashTimingVal');
-  if (inp) inp.value = timing;
-  if (val) val.textContent = timing;
-  document.querySelectorAll('.splash-option').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.splash) === saved);
-  });
-  openModal('splashSelectorModal');
-}
-function saveSplashSettings() {
-  const timing = parseInt(document.getElementById('splashTimingInput')?.value || 2);
-  const db = getDB();
-  db.settings.splashTheme = _selectedSplash;
-  db.settings.splashTiming = timing;
-  saveDB(db);
-  closeModal('splashSelectorModal');
-  showToast('✅ הגדרות Splash נשמרו', 'success');
-}
 
 
 // ============================================================
-// 📋 HANDOVER PROTOCOLS — Manager Tab
+// CUSTOM Q&A MANAGEMENT
 // ============================================================
 
-function renderHandoverList() {
-  const el = document.getElementById('handoverList');
+function renderCustomQAList() {
+  const el = document.getElementById('customQAList');
   if (!el) return;
   const db = getDB();
-  const handovers = db.handovers || {};
-  const today = new Date().toISOString().split('T')[0];
+  const qa = db.customQA || [];
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'accountant';
-  const isManager = currentUser.role === 'manager' || isUserDeptManager(currentUser.username);
-
-  // Get departments this manager manages
-  const myDepts = (() => {
-    const deptManagers = db.deptManagers || {};
-    return Object.entries(deptManagers)
-      .filter(([dept, mgr]) => mgr === currentUser.username)
-      .map(([dept]) => dept);
-  })();
-
-  const list = Object.values(handovers).filter(h => {
-    if (isAdmin) return true; // admin sees all
-    // Manager sees: explicitly assigned to them, OR employee in their dept
-    if (h.managerUsername === currentUser.username) return true;
-    if (isManager && myDepts.length > 0) {
-      const empUser = db.users[h.user];
-      if (empUser) {
-        const empDepts = Array.isArray(empUser.dept) ? empUser.dept : [empUser.dept].filter(Boolean);
-        return empDepts.some(d => myDepts.includes(d));
-      }
-    }
-    // role=manager with no dept assignment — see all handovers
-    if (currentUser.role === 'manager') return true;
-    return false;
-  }).sort((a, b) => a.date.localeCompare(b.date));
-
-  if (!list.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;font-size:14px;">אין פרוטוקולים ממתינים 🎉</div>';
+  if (!qa.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">אין שאלות מוגדרות עדיין. הוסף שאלות למעלה.</div>';
     return;
   }
 
-  // עדכן badge
-  const badge = document.getElementById('handoverBadge');
-  if (badge) {
-    const newCount = list.filter(h => !h.seenByManager).length;
-    if (newCount > 0) { badge.textContent = newCount + ' חדש'; badge.style.display = 'inline'; }
-    else badge.style.display = 'none';
-  }
-
-  el.innerHTML = list.map(h => {
-    const dateHeb = new Date(h.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
-    const isPast = h.date < today;
-    const seen = h.seenByManager ? '<span style="color:var(--success);font-size:11px;">✅ נקרא</span>' : '<span style="color:var(--warning);font-size:11px;">🔔 חדש</span>';
-    const pastTag = isPast ? '<span style="color:var(--text-muted);font-size:11px;">• עבר</span>' : '';
-    const tasks = h.tasks.map((t,i) => `<div style="font-size:13px;color:var(--text-secondary);padding:3px 0;">${i+1}. ${t}</div>`).join('');
-    const contact = h.contact ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📞 מחליף/ה: ${h.contact}</div>` : '';
-    const key = h.user + '_' + h.date;
-    return `
-      <div style="background:var(--surface2);border-radius:14px;padding:16px;margin-bottom:10px;border-right:4px solid ${isPast ? 'var(--border-strong)' : 'var(--primary)'};opacity:${isPast ? 0.6 : 1}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-          <div>
-            <div style="font-weight:800;font-size:15px;">👤 ${h.fullName}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">📅 ${dateHeb} ${pastTag}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            ${seen}
-            <button onclick="printHandoverPDF('${key}')" style="background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--primary);padding:4px 8px;font-family:'Heebo',sans-serif;" title="שמור כ-PDF">📄 PDF</button>
-            <button onclick="deleteHandover('${key}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);padding:4px;" title="מחק מהתצוגה">🗑️</button>
-          </div>
+  el.innerHTML = qa.map((entry, idx) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:13px;color:var(--primary);">❓ ${entry.question}</div>
+          ${entry.tags ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">🏷️ ${entry.tags}</div>` : ''}
         </div>
-        <div style="border-top:1px solid var(--border);padding-top:10px;">${tasks}${contact}</div>
-      </div>`;
-  }).join('');
-}
-
-function printHandoverPDF(key) {
-  const db = getDB();
-  // חפש ב-archive קודם, אחר כך ב-handovers
-  const h = (db.handoversArchive && db.handoversArchive[key]) || (db.handovers && db.handovers[key]);
-  if (!h) { showToast('פרוטוקול לא נמצא', 'error'); return; }
-
-  const dateHeb = new Date(h.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  const createdHeb = h.createdAt ? new Date(h.createdAt).toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
-  const tasksHtml = h.tasks.map((t,i) =>
-    `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#666;width:28px;">${i+1}.</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${t}</td></tr>`
-  ).join('');
-
-  const win = window.open('', '_blank', 'width=720,height=600');
-  win.document.write(`<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8">
-<title>פרוטוקול העברת מקל — ${h.fullName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-  body{font-family:'Heebo',sans-serif;direction:rtl;margin:0;padding:32px;color:#1e293b;background:#fff;}
-  h1{font-size:22px;font-weight:800;color:#1a56e8;margin-bottom:4px;}
-  .sub{font-size:13px;color:#64748b;margin-bottom:24px;}
-  .card{background:#f8fafc;border-radius:12px;padding:20px 24px;margin-bottom:20px;border:1px solid #e2e8f0;}
-  .label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
-  .value{font-size:15px;font-weight:600;color:#1e293b;}
-  table{width:100%;border-collapse:collapse;margin-top:8px;}
-  .footer{margin-top:32px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;}
-  @media print{body{padding:16px;}}
-</style></head>
-<body>
-<h1>📋 פרוטוקול העברת מקל</h1>
-<div class="sub">נוצר: ${createdHeb}</div>
-<div class="card">
-  <div style="display:flex;gap:32px;flex-wrap:wrap;">
-    <div><div class="label">שם העובד</div><div class="value">👤 ${h.fullName}</div></div>
-    <div><div class="label">תאריך חופשה</div><div class="value">📅 ${dateHeb}</div></div>
-    ${h.contact ? `<div><div class="label">מחליף/ה</div><div class="value">📞 ${h.contact}</div></div>` : ''}
-  </div>
-</div>
-<div class="card">
-  <div class="label">משימות לטיפול</div>
-  <table><tbody>${tasksHtml}</tbody></table>
-</div>
-<div class="footer">Dazura — מערכת ניהול חופשות | הופק אוטומטית</div>
-<script>window.onload=function(){window.print();}<\/script>
-</body></html>`);
-  win.document.close();
-}
-
-// הצג פרוטוקול בדוח האישי של העובד
-function renderMyHandoverCard() {
-  if (!currentUser) return;
-  // רק לעובדים — לא למנהל/אדמין
-  const isEmployee = currentUser.role === 'employee' || !currentUser.role;
-  const btn       = document.getElementById('myHandoverBtn');
-  const mobileBtn = document.getElementById('myHandoverBtnMobile');
-
-  if (!isEmployee) {
-    if (btn)       btn.style.display = 'none';
-    if (mobileBtn) mobileBtn.style.display = 'none';
-    return;
-  }
-
-  const db = getDB();
-  const today = new Date().toISOString().split('T')[0];
-
-  // חפש בarchive ובhandovers
-  const seen = new Set();
-  const myRecords = [
-    ...Object.values(db.handoversArchive || {}),
-    ...Object.values(db.handovers || {})
-  ]
-  .filter(h => h.user === currentUser.username)
-  .filter(h => {
-    const k = h.user + '_' + h.date;
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  })
-  .filter(h => {
-    const vacDates = Array.isArray(h.dates) && h.dates.length > 0 ? h.dates : [h.date];
-    return vacDates.slice().sort().pop() >= today;
-  });
-
-  const hasActive = myRecords.length > 0;
-
-  // כפתור desktop — תמיד גלוי לעובד, כחול כשיש פרוטוקול פעיל
-  if (btn) {
-    btn.style.display = '';
-    btn.style.color = hasActive ? 'var(--primary)' : '';
-    btn.style.fontWeight = hasActive ? '800' : '';
-  }
-
-  // כפתור מובייל — תמיד גלוי לעובד
-  if (mobileBtn) {
-    mobileBtn.style.display = '';
-    mobileBtn.style.color = hasActive ? 'var(--primary)' : '';
-  }
-}
-
-function openMyHandoverPopup() {
-  const db = getDB();
-  const today = new Date().toISOString().split('T')[0];
-
-  const allSources = [
-    ...Object.values(db.handoversArchive || {}),
-    ...Object.values(db.handovers || {})
-  ];
-  const seen2 = new Set();
-  const myRecords = allSources
-    .filter(h => h.user === currentUser.username)
-    .filter(h => {
-      const k = h.user + '_' + h.date;
-      if (seen2.has(k)) return false;
-      seen2.add(k);
-      return true;
-    })
-    .filter(h => {
-      const vacDates = Array.isArray(h.dates) && h.dates.length > 0 ? h.dates : [h.date];
-      return vacDates.slice().sort().pop() >= today;
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  const el = document.getElementById('myHandoverPopupContent');
-  if (!el) return;
-
-  if (!myRecords.length) {
-    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);">אין פרוטוקול פעיל כרגע.</div>';
-    openModal('myHandoverPopup');
-    return;
-  }
-
-  el.innerHTML = `
-    <div style="text-align:center;font-size:32px;margin-bottom:6px;">📋</div>
-    <div class="modal-title" style="justify-content:center;margin-bottom:18px;">פרוטוקול העברת מקל שלי</div>
-  ` + myRecords.map(h => {
-    const vacDates = (Array.isArray(h.dates) && h.dates.length > 0 ? h.dates : [h.date]).slice().sort();
-    const firstDate = vacDates[0];
-    const lastDate  = vacDates[vacDates.length - 1];
-    const totalDays = vacDates.length;
-
-    const fmtDate      = dt => new Date(dt + 'T00:00:00').toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' });
-    const fmtDateShort = dt => new Date(dt + 'T00:00:00').toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-    const rangeLabel   = firstDate === lastDate ? fmtDate(firstDate) : `${fmtDateShort(firstDate)} – ${fmtDate(lastDate)}`;
-
-    const isActive   = today >= firstDate && today <= lastDate;
-    const statusText = isActive ? '🟢 בחופשה עכשיו' : '⏳ מתוכננת';
-    const statusBg   = isActive ? '#dcfce7' : 'var(--primary-light)';
-    const statusClr  = isActive ? '#166534' : 'var(--primary-dark)';
-
-    const tasks = h.tasks.map((t, i) =>
-      `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-        <span style="font-size:12px;color:var(--text-muted);min-width:18px;">${i+1}.</span>
-        <span style="font-size:13px;color:var(--text);">${t}</span>
-      </div>`
-    ).join('');
-
-    const contact = h.contact
-      ? `<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:var(--primary-light);border-radius:10px;">
-           <span style="font-size:18px;">👤</span>
-           <div>
-             <div style="font-size:11px;color:var(--primary-dark);font-weight:700;">ממלא/ת מקום</div>
-             <div style="font-size:14px;font-weight:800;color:var(--text);">${h.contact}</div>
-           </div>
-         </div>`
-      : '';
-
-    return `
-      <div style="background:var(--surface2);border-radius:14px;overflow:hidden;margin-bottom:10px;border:1px solid var(--border);">
-        <div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-size:13px;font-weight:800;color:white;">📅 ${rangeLabel}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.8);margin-top:2px;">${totalDays} יום${totalDays>1?'ים':''}</div>
-          </div>
-          <span style="background:${statusBg};color:${statusClr};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;">${statusText}</span>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button onclick="editCustomQAEntry(${idx})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;">✏️</button>
+          <button onclick="deleteCustomQAEntry(${idx})" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;">🗑️</button>
         </div>
-        <div style="padding:14px 16px;">
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">משימות להעברה</div>
-          ${tasks}
-          ${contact}
-          <div style="margin-top:10px;font-size:11px;color:var(--text-muted);">🔒 ישמר עד ${fmtDateShort(lastDate)}</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  openModal('myHandoverPopup');
+      </div>
+      <div style="font-size:13px;color:var(--text);background:var(--surface2);border-radius:8px;padding:8px 12px;">💬 ${entry.answer}</div>
+    </div>
+  `).join('');
 }
 
+function saveCustomQAEntry() {
+  const questionRaw = document.getElementById('qaNewQuestion')?.value.trim();
+  const answer      = document.getElementById('qaNewAnswer')?.value.trim();
+  const tagsRaw     = document.getElementById('qaNewTags')?.value.trim();
 
-function deleteHandover(key) {
-  if (!confirm('להסיר פרוטוקול זה מהתצוגה?')) return;
-  const db = getDB();
-  if (db.handovers && db.handovers[key]) {
-    delete db.handovers[key]; // מוחק מתצוגת מנהל בלבד; archive נשמר
-    saveDB(db);
-    showToast('🗑️ פרוטוקול הוסר מהתצוגה', 'success');
-    renderHandoverList();
+  if (!questionRaw || !answer) {
+    showToast('⚠️ נא למלא שאלה ותשובה', 'warning'); return;
   }
-}
 
-function clearAllHandovers() {
-  if (!confirm('להסיר את כל הפרוטוקולים מהתצוגה?')) return;
+  // Support multiple question phrasings separated by comma
+  const questions = questionRaw.split(',').map(q => q.trim()).filter(Boolean);
+  const primaryQ  = questions[0];
+  const aliases   = questions.slice(1);
+  const tags      = tagsRaw || '';
+
   const db = getDB();
-  const isAdmin = currentUser.role === 'admin';
-  Object.keys(db.handovers || {}).forEach(key => {
-    const h = db.handovers[key];
-    if (isAdmin || h.managerUsername === currentUser.username) {
-      delete db.handovers[key]; // archive נשמר
-    }
-  });
+  if (!db.customQA) db.customQA = [];
+
+  const editIdx = document.getElementById('qaNewQuestion').dataset.editIdx;
+  if (editIdx !== undefined && editIdx !== '') {
+    db.customQA[parseInt(editIdx)] = { question: primaryQ, aliases, answer, tags };
+    showToast('✅ שאלה עודכנה', 'success');
+  } else {
+    db.customQA.push({ question: primaryQ, aliases, answer, tags });
+    showToast('✅ שאלה נוספה ל-AI', 'success');
+  }
+
   saveDB(db);
-  showToast('🗑️ כל הפרוטוקולים הוסרו מהתצוגה', 'success');
-  renderHandoverList();
+  pushToFirebase().catch(() => {});
+  auditLog('custom_qa_save', `שאלה נוספה/עודכנה: "${primaryQ}"`);
+
+  // Clear form
+  document.getElementById('qaNewQuestion').value = '';
+  document.getElementById('qaNewQuestion').removeAttribute('data-edit-idx');
+  document.getElementById('qaNewAnswer').value = '';
+  document.getElementById('qaNewTags').value = '';
+
+  renderCustomQAList();
 }
 
-function exportHandoversExcel() {
+function editCustomQAEntry(idx) {
   const db = getDB();
-  const handovers = db.handovers || {};
-  const today = new Date().toISOString().split('T')[0];
-  const isAdmin = currentUser.role === 'admin';
+  const entry = (db.customQA || [])[idx];
+  if (!entry) return;
 
-  const list = Object.values(handovers).filter(h =>
-    (isAdmin || h.managerUsername === currentUser.username) && h.date >= today
-  ).sort((a, b) => a.date.localeCompare(b.date));
+  const q = document.getElementById('qaNewQuestion');
+  const a = document.getElementById('qaNewAnswer');
+  const t = document.getElementById('qaNewTags');
+  if (!q || !a) return;
 
-  if (!list.length) { showToast('אין פרוטוקולים לייצוא', 'warning'); return; }
+  const allQ = [entry.question, ...(entry.aliases||[])].join(', ');
+  q.value = allQ;
+  q.dataset.editIdx = idx;
+  a.value = entry.answer;
+  if (t) t.value = entry.tags || '';
 
-  // Build CSV (Excel-compatible with BOM for Hebrew)
-  const BOM = '\uFEFF';
-  const headers = ['שם עובד', 'תאריך חופשה', 'משימה 1', 'משימה 2', 'משימה 3', 'מחליף/ה', 'נקרא'];
-  const rows = list.map(h => [
-    h.fullName,
-    h.date,
-    h.tasks[0] || '',
-    h.tasks[1] || '',
-    h.tasks[2] || '',
-    h.contact || '',
-    h.seenByManager ? 'כן' : 'לא'
-  ]);
+  q.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  q.focus();
+}
 
-  const csv = BOM + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+function deleteCustomQAEntry(idx) {
+  const db = getDB();
+  const entry = (db.customQA || [])[idx];
+  if (!entry) return;
+  if (!confirm(`למחוק את השאלה: "${entry.question}"?`)) return;
+  db.customQA.splice(idx, 1);
+  saveDB(db);
+  pushToFirebase().catch(() => {});
+  renderCustomQAList();
+  showToast('🗑️ שאלה נמחקה', 'info');
+}
+
+function exportCustomQA() {
+  const db = getDB();
+  const qa = db.customQA || [];
+  if (!qa.length) { showToast('אין שאלות לייצוא', 'warning'); return; }
+
+  const BOM = '﻿';
+  const csv = BOM + 'שאלה,ניסוחים נוספים,תשובה,תגיות\n' +
+    qa.map(e => [
+      `"${(e.question||'').replace(/"/g,'""')}"`,
+      `"${(e.aliases||[]).join('|').replace(/"/g,'""')}"`,
+      `"${(e.answer||'').replace(/"/g,'""')}"`,
+      `"${(e.tags||'').replace(/"/g,'""')}"`
+    ].join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');

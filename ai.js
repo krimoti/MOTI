@@ -110,7 +110,7 @@ const DazuraAI = (() => {
   const INTENT_RULES = [
     { name:'who_am_i',      score: t=>/מי אני|שמי|הפרופיל שלי|זהות|פרטים שלי/.test(t)?10:0 },
     { name:'who_is_moti',   score: t=>/^מי אתה|^מה אתה$|תציג את עצמך|ספר לי על עצמך|מה השם שלך|מה שמך|מי אתה\?|^מה אני יכול לשאול|מה אתה יודע|תעזור לי$|מה אני יכול לשאול אותך/.test(t.trim())?12:0 },
-    { name:'my_dept',       score: t=>/מחלקה שלי|באיזה מחלקה|הצוות שלי|אני ב/.test(t)?10:0 },
+    { name:'my_dept',       score: t=>/מחלקה שלי|באיזה מחלקה|הצוות שלי|אני ב|המחלקה שלי/.test(t)?10:0 },
     { name:'my_balance',    score: t=>/יתרה|יתרת|כמה (ימים|יום) (יש|נשאר|נותר|זמין)|balance|כמה חופשה|מה היתרה|כמה נשאר לי|כמה יש לי|מה נשאר לי|כמה נותר לי/.test(t)?10:0 },
     { name:'my_used',       score: t=>/ניצלתי|לקחתי|השתמשתי|ניצול|ימים שניצלתי|כמה (השתמשתי|לקחתי)/.test(t)?10:0 },
     { name:'my_quota',      score: t=>/מכסה|כמה ימי חופש מגיע|זכאי ל/.test(t)?10:0 },
@@ -144,6 +144,7 @@ const DazuraAI = (() => {
     { name:'handovers',     score: t=>/פרוטוקול|העברת מקל|handover/.test(t)?10:0 },
     { name:'holidays',      score: t=>/חג|חגים|פסח|ראש השנה|סוכות|חנוכה|פורים|עצמאות|כיפור|שבועות/.test(t)?10:0 },
     { name:'team_info',     score: t=>/חברי הצוות|מי מ(ה?)צוות|עמיתים/.test(t)?10:0 },
+    { name:'dept_members',  score: t=>/מי (ב|במ)מחלקה שלי|מי בצוות שלי|כמה אנשים בצוות|אנשי הצוות|רשימת הצוות|מי עובד (אצלי|במחלקה)/.test(t)?11:0 },
     { name:'greeting',      score: t=>/^(שלום|היי|הי|בוקר|ערב|צהריים|מה נשמע|מה מצבך|מה קורה)\s*/.test(t)?10:0 },
     { name:'help',          score: t=>/עזרה|help|מה אתה יכול|מה ניתן לשאול|מה אפשר|מה אני יכול לשאול|מה ניתן|מה אתה יודע/.test(t)?10:0 },
     { name:'off_topic',     score: t=>/מזג אוויר|בישול|מתכון|חדשות|ספורט|פוליטיקה|crypto|ביטקוין/.test(t)?10:0 },
@@ -369,8 +370,16 @@ const DazuraAI = (() => {
   function hasAdminAccess(user) {
     return user&&(user.role==='admin'||user.role==='accountant'||user.username==='gmaneg');
   }
-  function hasManagerAccess(user) {
-    return user&&(hasAdminAccess(user)||user.role==='manager');
+  function hasManagerAccess(user, db) {
+    if (!user) return false;
+    if (hasAdminAccess(user)) return true;
+    if (user.role === 'manager') return true;
+    // Also grant manager access to dept managers (role may be 'employee')
+    if (db) {
+      const deptManagers = db.deptManagers || {};
+      if (Object.values(deptManagers).includes(user.username)) return true;
+    }
+    return false;
   }
 
   // ============================================================
@@ -436,7 +445,7 @@ const DazuraAI = (() => {
   }
 
   function respondWhoAt(db, dateInfo, currentUser, filterType) {
-    const isAdmin=hasAdminAccess(currentUser), isManager=hasManagerAccess(currentUser);
+    const isAdmin=hasAdminAccess(currentUser), isManager=hasManagerAccess(currentUser, db);
     const dateStr=dateToKey(dateInfo.date||new Date());
     const label=dateInfo.label;
     const allStats=getStatsForDate(db,dateStr);
@@ -496,6 +505,7 @@ const DazuraAI = (() => {
   // WHO IS WHERE — date range
   function respondWhoAtRange(db, dateInfo, currentUser, filterType) {
     const isAdmin=hasAdminAccess(currentUser);
+    const isManager=hasManagerAccess(currentUser, db);
     const seen={vacation:new Set(),wfh:new Set(),sick:new Set()};
     const start=new Date(dateInfo.dateStart), end=new Date(dateInfo.dateEnd);
     for (let d=new Date(start);d<=end;d.setDate(d.getDate()+1)) {
@@ -505,9 +515,20 @@ const DazuraAI = (() => {
       s.sick.forEach(n=>seen.sick.add(n));
     }
     if (!isAdmin) {
-      const dept=Array.isArray(currentUser.dept)?currentUser.dept[0]:currentUser.dept;
-      const inDept=name=>Object.values(db.users).some(u=>u.fullName===name&&(Array.isArray(u.dept)?u.dept[0]:u.dept)===dept);
-      ['vacation','wfh','sick'].forEach(k=>{seen[k]=new Set([...seen[k]].filter(inDept));});
+      // Manager sees only their managed departments; plain employee sees all (view-only)
+      const myDepts = Object.entries(db.deptManagers||{})
+        .filter(([,v])=>v===currentUser.username).map(([k])=>k);
+      if (isManager && myDepts.length) {
+        const inMyDept = name => {
+          const u = Object.values(db.users).find(u=>u.fullName===name);
+          if (!u) return false;
+          const d = Array.isArray(u.dept) ? u.dept : [u.dept];
+          return d.some(dep=>myDepts.includes(dep));
+        };
+        ['vacation','wfh','sick'].forEach(k=>{seen[k]=new Set([...seen[k]].filter(inMyDept));});
+      } else if (!isManager) {
+        // plain employee — keep existing behaviour (show all absences for awareness)
+      }
     }
     const refDate=dateToKey(dateInfo.dateStart||dateInfo.date||new Date());
     const fmtV=name=>{const u=nameToUser(db,name);return u?fmtWithHandover(db,u,name,refDate):`• ${name}`;};
@@ -681,7 +702,7 @@ const DazuraAI = (() => {
   // ============================================================
   function respondFAQ(intent, currentUser, db) {
     const isAdmin   = hasAdminAccess(currentUser);
-    const isManager = hasManagerAccess(currentUser);
+    const isManager = hasManagerAccess(currentUser, db);
     const settings  = db.settings || {};
     const companyName = settings.companyName || 'החברה שלי';
 
@@ -911,7 +932,7 @@ const DazuraAI = (() => {
   function respondTechFAQ(intent, user) {
     const n = user.fullName.split(' ')[0];
     const isAdmin = hasAdminAccess(user);
-    const isManager = hasManagerAccess(user);
+    const isManager = hasManagerAccess(user, db);
 
     const FAQ = {
       faq_tech_formats:     `**פורמטים לייצוא דוחות:**
@@ -1213,7 +1234,7 @@ const DazuraAI = (() => {
 
   function respondApology(user) {
     const isAdmin   = hasAdminAccess(user);
-    const isManager = hasManagerAccess(user);
+    const isManager = hasManagerAccess(user, db);
     const examples  = isAdmin
       ? `• "מה יתרת החופשה שלי?"\n• "מי בחופשה מחר?"\n• "ציוני רווחת עובדים"\n• "תחזה מחסור כוח אדם"\n• "איך מוסיפים עובד?"` 
       : isManager
@@ -1228,7 +1249,7 @@ const DazuraAI = (() => {
 
   function respondWhoIsMoti(user) {
     const isAdmin   = hasAdminAccess(user);
-    const isManager = hasManagerAccess(user);
+    const isManager = hasManagerAccess(user, db);
     const role      = isAdmin ? 'מנהל מערכת (Admin)' : isManager ? 'מנהל מחלקה' : 'עובד';
     return `אני **MOTI** — העוזר החכם של מערכת **Dazura** 🤖\n\nנבנתי על ידי **מוטי קריחלי ** עם המטרה להפוך את ניהול החופשות לפשוט, חכם וקצת יותר אנושי.\n\n**מה אני יודע לעשות:**\n• עונה על שאלות חופשה, יתרות, נוכחות ושעות\n• מדריך אותך איך להשתמש בכל לשונית במערכת\n• מספק נתונים בזמן אמת מה-DB\n• מבין עברית חופשית — פשוט שאל/י\n${isManager||isAdmin ? '• מנתח עומסים, תחזיות, שחיקה ועלויות\n' : ''}${isAdmin ? '• ניהול עובדים, הרשאות, גיבויים ו-Firebase\n' : ''}\nאת/ה מחובר/ת כ: **${user.fullName}** | תפקיד: **${role}**\n\nמה תרצה לדעת? 😊`;
   }
@@ -1244,7 +1265,7 @@ const DazuraAI = (() => {
   // ============================================================
   function respondHelp(user) {
     const isAdmin   = hasAdminAccess(user);
-    const isManager = hasManagerAccess(user);
+    const isManager = hasManagerAccess(user, db);
     const firstName = user.fullName.split(' ')[0];
 
     if (isAdmin) {
@@ -1284,7 +1305,7 @@ const DazuraAI = (() => {
   function respondUnknown(rawInput, currentUser, db) {
     const t          = rawInput.toLowerCase();
     const isAdmin    = hasAdminAccess(currentUser);
-    const isManager  = hasManagerAccess(currentUser);
+    const isManager  = hasManagerAccess(currentUser, db);
     const firstName  = currentUser.fullName.split(' ')[0];
 
     // ── 1. ניסה לכתוב שאלת יתרה בניסוח חופשי ──────────────
@@ -1346,19 +1367,71 @@ const DazuraAI = (() => {
     if (/^(ומה איתו|ומה איתה|ומה עם|מה הסטטוס שלו|כמה ימים יש לו|כמה יש לה)\??/.test(t)) return 'about_subject';
     if (/בהקשר|בנוגע לזה|על זה|אותו דבר|אותה שאלה/.test(t)) return 'same_context';
     if (/^(מי מהצוות|מי מהמחלקה|מי עוד מ)/.test(t)) return 'more_dept';
+    // Broader follow-up patterns — reference previous answer
+    if (/^(ולמה|למה זה|למה כך|איך זה|מה זה אומר|מה הכוונה|תסביר|תפרט|תרחיב)\??/.test(t)) return 'explain_last';
+    if (/^(ומה ב|ומה לגבי|מה לגבי|ומה עם|ואיך ב)\s/.test(t)) return 'pivot';
+    if (/^(כן|אוקי|בסדר|הבנתי|אחד|שניים|שלוש|ראשון|שני|שלישי)\s*[,.]?\s*/.test(t) && t.length < 20) return 'short_confirm';
     return null;
+  }
+
+  // Returns last N items from conversation history that match a role
+  function getRecentHistory(n) {
+    return conversationHistory.slice(-n * 2);
+  }
+
+  // Get the last AI response text
+  function getLastAIResponse() {
+    for (let i = conversationHistory.length - 1; i >= 0; i--) {
+      if (conversationHistory[i].role === 'ai') return conversationHistory[i].text;
+    }
+    return null;
+  }
+
+  // Get last N user questions (excluding current)
+  function getLastUserQuestions(n) {
+    return conversationHistory
+      .filter(h => h.role === 'user')
+      .slice(-n)
+      .map(h => h.text);
   }
 
   function handleFollowUp(followUpType, currentUser, db) {
     const ctx = lastContext;
-    if (!ctx.intent) return null;
+    const firstName = currentUser.fullName.split(' ')[0];
 
     if (followUpType === 'more_results') {
       if (ctx.resultList && ctx.resultList.length > 0) {
-        return `כל הרשימה שהייתה:\n${ctx.resultList.map(n=>'• '+n).join('\n')}`;
+        // Return full list with today's status if available
+        const today = new Date().toISOString().split('T')[0];
+        const statusMap = { full:'🏖️', half:'🌅', wfh:'🏠', sick:'🤒' };
+        const lines = ctx.resultList.map(name => {
+          const u = Object.values(db.users||{}).find(u => u.fullName === name);
+          if (!u) return `• ${name}`;
+          const tp = (db.vacations?.[u.username]||{})[today];
+          const status = statusMap[tp] || '📍';
+          return `• **${name}** ${status}`;
+        });
+        const label = ctx.dept ? `מחלקת **${ctx.dept}**` : 'הרשימה המלאה';
+        return `${label} (${ctx.resultList.length}):\n${lines.join('\n')}`;
       }
       if (ctx.data && ctx.data.moreInfo) return ctx.data.moreInfo;
-      return 'אין לי עוד נתונים בהקשר לשאלה הקודמת.';
+      // Try to reconstruct from dept context
+      if (ctx.dept) {
+        const today2 = new Date().toISOString().split('T')[0];
+        const statusMap2 = { full:'🏖️', half:'🌅', wfh:'🏠', sick:'🤒' };
+        const members = Object.values(db.users||{}).filter(u => {
+          const d = Array.isArray(u.dept) ? u.dept[0] : u.dept;
+          return d === ctx.dept && u.status !== 'pending';
+        });
+        if (members.length) {
+          const lines2 = members.map(u => {
+            const tp = (db.vacations?.[u.username]||{})[today2];
+            return `• **${u.fullName}** ${statusMap2[tp]||'📍'}`;
+          });
+          return `מחלקת **${ctx.dept}** — כל ${members.length} העובדים:\n${lines2.join('\n')}`;
+        }
+      }
+      return `לא נשמרו נתונים נוספים מהשאלה הקודמת. שאל/י שוב בצורה מפורשת.`;
     }
 
     if (followUpType === 'about_subject' && ctx.subject) {
@@ -1367,8 +1440,7 @@ const DazuraAI = (() => {
     }
 
     if (followUpType === 'same_context') {
-      // Re-run last intent with same date
-      if (ctx.intent && ctx.dateInfo) return null; // will fall through to normal flow
+      if (ctx.intent && ctx.dateInfo) return null; // fall through to normal flow
     }
 
     if (followUpType === 'more_dept' && ctx.dept) {
@@ -1378,6 +1450,24 @@ const DazuraAI = (() => {
         return d===dept && u.status!=='pending';
       });
       return `כל עובדי מחלקת **${dept}** (${team.length}):\n${team.map(u=>'• '+u.fullName).join('\n')}`;
+    }
+
+    if (followUpType === 'explain_last') {
+      const lastAI = getLastAIResponse();
+      if (!lastAI) return null;
+      // Give context about what was answered
+      return `להסבר: ${lastAI}\n\nאם יש שאלה ספציפית על הנתונים האלה — שאל/י ואפרט יותר 😊`;
+    }
+
+    if (followUpType === 'pivot') {
+      // e.g. "ומה לגבי מחר?" — fall through to normal intent detection
+      return null;
+    }
+
+    if (followUpType === 'short_confirm' && ctx.intent) {
+      // Short affirmation — recap last answer
+      const lastAI = getLastAIResponse();
+      if (lastAI) return `בסדר ${firstName} 😊 אם יש שאלה נוספת — אני כאן.`;
     }
 
     return null;
@@ -1499,10 +1589,18 @@ const DazuraAI = (() => {
     }
 
     // ── Normal intent flow ────────────────────────────────────
-    const isAdmin=hasAdminAccess(currentUser), isManager=hasManagerAccess(currentUser);
+    const isAdmin=hasAdminAccess(currentUser), isManager=hasManagerAccess(currentUser, db);
     const intent=detectIntent(rawInput);
     const dateInfo=parseTargetDate(rawInput);
     const year=dateInfo.year||extractYear(rawInput);
+
+    // ── Context enrichment from history (up to 10 messages back) ──
+    // If the question references "הוא/היא/זה" without a clear subject,
+    // try to resolve from the last context
+    const hasVagueRef = /הוא|היא|הם|שלו|שלה|איתו|איתה/.test(rawInput) && !lastContext.subject;
+    if (hasVagueRef && lastContext.subject) {
+      // subject is already set in lastContext — handleFollowUp will use it
+    }
 
     let response='';
     switch(intent) {
@@ -1511,9 +1609,24 @@ const DazuraAI = (() => {
       case 'help':            response=respondHelp(currentUser); break;
       case 'who_am_i':        response=respondWhoAmI(currentUser,db); lastContext={intent,resultList:[],subject:currentUser.username,dept:null}; break;
       case 'my_dept': {
-        const dept=Array.isArray(currentUser.dept)?currentUser.dept.join(', '):(currentUser.dept||'לא מוגדר');
-        response=`אתה משויך למחלקת **${dept}**.`;
-        lastContext={intent,dept:Array.isArray(currentUser.dept)?currentUser.dept[0]:currentUser.dept,resultList:[]}; break;
+        const myDeptName = Array.isArray(currentUser.dept) ? currentUser.dept[0] : (currentUser.dept||'לא מוגדר');
+        const deptDisplay = Array.isArray(currentUser.dept) ? currentUser.dept.join(', ') : (currentUser.dept||'לא מוגדר');
+        // Find all teammates in same dept (including self)
+        const teammates = Object.values(db.users||{}).filter(u => {
+          if (u.status === 'pending') return false;
+          const d = Array.isArray(u.dept) ? u.dept[0] : u.dept;
+          return d === myDeptName;
+        });
+        const today = dateToKey(new Date());
+        const statusMap = { full:'🏖️', half:'🌅', wfh:'🏠', sick:'🤒' };
+        const teammateLines = teammates.map(u => {
+          const tp = (db.vacations?.[u.username]||{})[today];
+          const status = statusMap[tp] || '📍';
+          const me = u.username === currentUser.username ? ' (אתה)' : '';
+          return `• **${u.fullName}**${me} ${status}`;
+        });
+        lastContext={intent,dept:myDeptName,resultList:teammates.map(u=>u.fullName),data:{dept:myDeptName}};
+        response=`מחלקת **${deptDisplay}** — ${teammates.length} עובדים:\n${teammateLines.join('\n')}`; break;
       }
       case 'my_balance':      response=respondMyBalance(currentUser,db,year); lastContext={intent,data:{year}}; break;
       case 'my_used':         response=respondMyUsed(currentUser,db,year); lastContext={intent}; break;
@@ -1535,13 +1648,8 @@ const DazuraAI = (() => {
 
       // WHO — all date-aware, save context for follow-ups
       case 'who_vacation': {
-        const stats = getStatsForDate(db, dateToKey(dateInfo.date||new Date()));
-        const filtered = isAdmin ? stats.vacation : stats.vacation.filter(n => {
-          const u=Object.values(db.users).find(u=>u.fullName===n);
-          const myDept=Array.isArray(currentUser.dept)?currentUser.dept[0]:currentUser.dept;
-          return u&&(Array.isArray(u.dept)?u.dept[0]:u.dept)===myDept;
-        });
-        lastContext={intent,dateInfo,resultList:filtered,dept:null};
+        const _vacStats = getStatsForDate(db, dateToKey(dateInfo.date||new Date()));
+        lastContext={intent,dateInfo,resultList:_vacStats.vacation,dept:null};
         response=dateInfo.range?respondWhoAtRange(db,dateInfo,currentUser,'vacation'):respondWhoAt(db,dateInfo,currentUser,'vacation'); break;
       }
       case 'who_wfh': {
@@ -1558,8 +1666,14 @@ const DazuraAI = (() => {
         response=dateInfo.range?respondWhoAtRange(db,dateInfo,currentUser,'office'):respondWhoAt(db,dateInfo,currentUser,'office'); break;
       }
       case 'team_status': {
-        const dept=Array.isArray(currentUser.dept)?currentUser.dept[0]:currentUser.dept;
-        lastContext={intent,dateInfo,dept};
+        const _tsDept = Array.isArray(currentUser.dept)?currentUser.dept[0]:currentUser.dept;
+        const _tsDate = dateToKey(dateInfo.date||new Date());
+        const _tsAll = Object.values(db.users||{}).filter(u => {
+          if (u.status==='pending') return false;
+          const d = Array.isArray(u.dept)?u.dept[0]:u.dept;
+          return d === _tsDept;
+        });
+        lastContext={intent,dateInfo,dept:_tsDept,resultList:_tsAll.map(u=>u.fullName)};
         response=dateInfo.range?respondWhoAtRange(db,dateInfo,currentUser,null):respondWhoAt(db,dateInfo,currentUser,null); break;
       }
 
@@ -1623,11 +1737,30 @@ const DazuraAI = (() => {
         if(!isManager){response='מידע זה זמין למנהלים בלבד.';break;}
         response=respondHandovers(db,currentUser); break;
       case 'holidays':        response=respondHolidays(year); break;
+      case 'dept_members':
       case 'team_info': {
-        const dept=Array.isArray(currentUser.dept)?currentUser.dept[0]:currentUser.dept;
-        const team=Object.values(db.users||{}).filter(u=>(Array.isArray(u.dept)?u.dept[0]:u.dept)===dept);
-        lastContext={intent,dept,resultList:team.map(u=>u.fullName)};
-        response=`מחלקת ${dept}: **${team.length} עובדים** — ${team.map(u=>u.fullName).join(', ')}.`; break;
+        // Manager sees their managed depts; employee sees own dept
+        let teamDept = Array.isArray(currentUser.dept) ? currentUser.dept[0] : currentUser.dept;
+        if (isManager && !hasAdminAccess(currentUser)) {
+          const myManagedDepts = Object.entries(db.deptManagers||{}).filter(([,v])=>v===currentUser.username).map(([k])=>k);
+          if (myManagedDepts.length) teamDept = myManagedDepts[0];
+        }
+        const today = dateToKey(new Date());
+        const statusMap = { full:'🏖️', half:'🌅', wfh:'🏠', sick:'🤒' };
+        const team = Object.values(db.users||{}).filter(u => {
+          if (u.status === 'pending') return false;
+          const d = Array.isArray(u.dept) ? u.dept[0] : u.dept;
+          return d === teamDept;
+        });
+        const teamLines = team.map(u => {
+          const tp = (db.vacations?.[u.username]||{})[today];
+          const status = statusMap[tp] || '📍';
+          const cb2 = calcBalanceAI(u.username, new Date().getFullYear(), db);
+          const bal = cb2 ? ` | יתרה: ${cb2.balance.toFixed(1)}י` : '';
+          return `• **${u.fullName}** ${status}${bal}`;
+        });
+        lastContext={intent,dept:teamDept,resultList:team.map(u=>u.fullName)};
+        response=`מחלקת **${teamDept}** — ${team.length} עובדים:\n${teamLines.join('\n')}`;; break;
       }
       case 'off_topic':       response='אני מתמחה בחופשות ונוכחות. לשאלות אחרות — פנה למקורות מתאימים. 😊'; break;
       case 'thanks':          response=MOTI_THANKS[Math.floor(Math.random()*MOTI_THANKS.length)](firstName); break;
