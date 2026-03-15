@@ -1442,9 +1442,7 @@ ${absentStr}
         const d=Array.isArray(u.dept)?u.dept[0]:u.dept;
         return d===dept && u.status!=='pending';
       });
-      return `כל עובדי מחלקת **${dept}** (${team.length}):
-${team.map(u=>'• '+u.fullName).join('
-')}`;
+      return `כל עובדי מחלקת **${dept}** (${team.length}):\n${team.map(u=>'• '+u.fullName).join('\n')}`;
     }
 
     // המשך עם תאריך מחר

@@ -211,9 +211,7 @@ const DazuraFuse = (() => {
     if (wfh.length)    lines.push(`🏠 **מהבית (${wfh.length}):** ${wfh.join(', ')}`);
     if (sick.length)   lines.push(`🤒 **מחלה (${sick.length}):** ${sick.join(', ')}`);
     if (office.length) lines.push(`📍 **במשרד (${office.length}):** ${office.join(', ')}`);
-    return lines.length ? `**מצב היום:**
-${lines.join('
-')}` : 'כולם במשרד היום 📍';
+    return lines.length ? `**מצב היום:**\n${lines.join('\n')}` : 'כולם במשרד היום 📍';
   }
 
   function _dashboardToday(db, currentUser, today) {
@@ -227,11 +225,9 @@ ${lines.join('
     });
     const pending = (db?.approvalRequests || []).filter(r => r.status === 'pending').length;
     const avail = users.length - vac - sick;
-    return `**מצב היום (${today.split('-').reverse().slice(0,2).join('/')}):**
-` +
+    return `**מצב היום (${today.split('-').reverse().slice(0,2).join('/')}):**\n` +
       `👥 ${avail}/${users.length} זמינים | 🏖️ ${vac} חופשה | 🏠 ${wfh} מהבית | 🤒 ${sick} מחלה` +
-      (pending ? `
-⏳ ${pending} בקשות ממתינות לאישור` : '');
+      (pending ? `\n⏳ ${pending} בקשות ממתינות לאישור` : '');
   }
 
   // ──────────────────────────────────────────
