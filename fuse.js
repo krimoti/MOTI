@@ -144,7 +144,98 @@ const DazuraFuse = (() => {
   }
 
   // ──────────────────────────────────────────
-  // 4. SMART FALLBACK (ללא LLM)
+  // 4. PRE-INTENT — זיהוי כוונה לפני DazuraAI
+  // ──────────────────────────────────────────
+
+  // מנגנון זיהוי עצמאי לשאלות קצרות/עמומות
+  function preIntent(text, currentUser, db) {
+    const t = text.trim().toLowerCase();
+    const today = new Date().toISOString().split('T')[0];
+
+    // ── "מי" לבד או "מי?" ──
+    if (/^מי\??\s*$/.test(t)) {
+      return _whoToday(db, currentUser, today);
+    }
+
+    // ── "מה" / "מה קורה" / "מה נשמע" ──
+    if (/^מה\??\s*$|^מה קורה|^מה נשמע|^מה המצב|^מה הולך/.test(t)) {
+      return _dashboardToday(db, currentUser, today);
+    }
+
+    // ── "איפה כולם" / "איפה" ──
+    if (/^איפה|כולם איפה/.test(t)) {
+      return _whoToday(db, currentUser, today);
+    }
+
+    // ── "למה" — הומור ──
+    if (/^למה\??\s*$/.test(t)) {
+      return `למה? זו שאלה פילוסופית 😄 אבל אם שאלת למה מישהו בחופשה — שאל "מי בחופשה היום?" ואני אענה ברצינות.`;
+    }
+
+    // ── "מתי" לבד ──
+    if (/^מתי\??\s*$/.test(t)) {
+      return `מתי מה? 😊 נסה: "מתי החופש הבא שלי?" או "מתי [שם] חוזר מחופשה?"`;
+    }
+
+    // ── "כמה" לבד ──
+    if (/^כמה\??\s*$/.test(t)) {
+      const cb = typeof calcBalanceAI !== 'undefined'
+        ? null : null; // calcBalanceAI is in ai.js scope
+      return `כמה מה? נסה: "כמה ימי חופש נשארו לי?" או "כמה עובדים בחופשה היום?"`;
+    }
+
+    // ── שם עובד לבד (בלי פועל) ──
+    const empUsername = smartExtractEmployee(text, db);
+    if (empUsername && db?.users?.[empUsername] && text.trim().length < 30) {
+      const u = db.users[empUsername];
+      const type = db?.vacations?.[empUsername]?.[today];
+      const statusMap = { full:'🏖️ בחופשה', half:'🌅 חצי יום', wfh:'🏠 מהבית', sick:'🤒 מחלה' };
+      return `**${u.fullName}** היום: ${statusMap[type] || '📍 במשרד'}`;
+    }
+
+    return null; // לא זוהה — המשך לDazuraAI
+  }
+
+  function _whoToday(db, currentUser, today) {
+    const users = Object.values(db?.users || {}).filter(u => u.status !== 'pending' && u.fullName);
+    const vac=[], wfh=[], sick=[], office=[];
+    users.forEach(u => {
+      const t = (db?.vacations?.[u.username] || {})[today];
+      if (t === 'full' || t === 'half') vac.push(u.fullName);
+      else if (t === 'wfh') wfh.push(u.fullName);
+      else if (t === 'sick') sick.push(u.fullName);
+      else office.push(u.fullName);
+    });
+    const lines = [];
+    if (vac.length)    lines.push(`🏖️ **בחופשה (${vac.length}):** ${vac.join(', ')}`);
+    if (wfh.length)    lines.push(`🏠 **מהבית (${wfh.length}):** ${wfh.join(', ')}`);
+    if (sick.length)   lines.push(`🤒 **מחלה (${sick.length}):** ${sick.join(', ')}`);
+    if (office.length) lines.push(`📍 **במשרד (${office.length}):** ${office.join(', ')}`);
+    return lines.length ? `**מצב היום:**
+${lines.join('
+')}` : 'כולם במשרד היום 📍';
+  }
+
+  function _dashboardToday(db, currentUser, today) {
+    const users = Object.values(db?.users || {}).filter(u => u.status !== 'pending');
+    let vac=0, wfh=0, sick=0;
+    users.forEach(u => {
+      const t = (db?.vacations?.[u.username] || {})[today];
+      if (t === 'full' || t === 'half') vac++;
+      else if (t === 'wfh') wfh++;
+      else if (t === 'sick') sick++;
+    });
+    const pending = (db?.approvalRequests || []).filter(r => r.status === 'pending').length;
+    const avail = users.length - vac - sick;
+    return `**מצב היום (${today.split('-').reverse().slice(0,2).join('/')}):**
+` +
+      `👥 ${avail}/${users.length} זמינים | 🏖️ ${vac} חופשה | 🏠 ${wfh} מהבית | 🤒 ${sick} מחלה` +
+      (pending ? `
+⏳ ${pending} בקשות ממתינות לאישור` : '');
+  }
+
+  // ──────────────────────────────────────────
+  // 5. SMART FALLBACK (ללא LLM)
   // ──────────────────────────────────────────
 
   function fallback(text, currentUser, db) {
@@ -176,15 +267,26 @@ const DazuraFuse = (() => {
       return `מחלקת **${deptName}**: ${inDept.length} עובדים, ${away.length} נעדרים היום.`;
     }
 
-    // הצעה לפי מילות מפתח
+    // זיהוי לפי מילות מפתח — תשובה מיידית ולא הצעה
     const t = text.toLowerCase();
-    if (/חופש|חופשה|יתרה|ימים/.test(t))  return `שאל/י: "מה היתרה שלי?" או "מי בחופשה היום?" 💡`;
-    if (/מחלקה|צוות|עובדים/.test(t))      return `שאל/י: "מצב הצוות היום" או "מי במחלקה X?" 💡`;
-    if (/מחר|השבוע|שבוע הבא/.test(t))     return `שאל/י: "מי בחופשה מחר?" או "מצב השבוע הבא" 💡`;
-    if (/שעות|כניסה|יציאה/.test(t))       return `שאל/י: "איך מתקנים שעות?" או "למי מדווחות השעות?" 💡`;
-    if (/אישור|בקשה|סטטוס/.test(t))       return `שאל/י: "מה סטטוס הבקשה שלי?" 💡`;
+    if (/^(מי|מי\?)$/.test(t.trim()))
+      return _whoToday(db, currentUser, today);
+    if (/חופש|חופשה|נופש|נהנה|יצא.*חופש|לא מגיע/.test(t))
+      return _whoToday(db, currentUser, today);
+    if (/יתרה|כמה ימים|נשאר לי|יש לי/.test(t))
+      return `שאל: "מה היתרה שלי?" ואני אחשב בדיוק 💡`;
+    if (/מחלקה|צוות|עובדים|כולם/.test(t))
+      return _whoToday(db, currentUser, today);
+    if (/מחר|השבוע|שבוע הבא/.test(t))
+      return _whoToday(db, currentUser, today);
+    if (/שעות|כניסה|יציאה/.test(t))
+      return `שאל: "איך מתקנים שעות?" או "למי מדווחות השעות?" 💡`;
+    if (/אישור|בקשה|סטטוס/.test(t))
+      return `שאל: "מה סטטוס הבקשה שלי?" 💡`;
+    if (/מצב|קורה|נשמע/.test(t))
+      return _dashboardToday(db, currentUser, today);
 
-    return `שאל אותי: "מי בחופשה היום?" | "מה היתרה שלי?" | "מצב הצוות" 💡`;
+    return _whoToday(db, currentUser, today);
   }
 
   // ──────────────────────────────────────────
@@ -198,7 +300,14 @@ const DazuraFuse = (() => {
     _history.push({ role: 'user', text: msg });
     if (_history.length > MAX_HISTORY) _history = _history.slice(-MAX_HISTORY);
 
-    // שלב 1: DazuraAI מקומי (ai.js + ai-patch.js)
+    // שלב 0: Pre-intent — שאלות קצרות/עמומות
+    const pre = preIntent(msg, currentUser, db);
+    if (pre) {
+      _history.push({ role: 'ai', text: pre });
+      return pre;
+    }
+
+    // שלב 1: DazuraAI מקומי
     let local = null;
     try {
       if (typeof DazuraAI !== 'undefined') {
