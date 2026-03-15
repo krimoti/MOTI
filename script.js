@@ -2278,6 +2278,7 @@ function renderAdmin() {
   
   renderAdminVacations();
   renderApprovalRequests();
+  renderCustomQAList();
 }
 
 function saveEmpSalary(username, val) {
@@ -7186,488 +7187,124 @@ window.addEventListener('load', function() {
 
 
 
-// ============================================================
-// AI PANEL FUNCTIONS
-// ============================================================
-let _aiPanelOpen = false;
-
-function toggleAIPanel() {
-  const panel = document.getElementById('aiPanel');
-  const btn   = document.getElementById('aiFloatBtn');
-  if (!panel) return;
-  _aiPanelOpen = !_aiPanelOpen;
-  panel.classList.toggle('open', _aiPanelOpen);
-  if (_aiPanelOpen) {
-      setTimeout(() => { document.getElementById('aiInput')?.focus(); }, 300);
-    scrollAIToBottom();
-  }
-}
-
-async function sendAIMessage() {
-  const input = document.getElementById('aiInput');
-  const msg = input?.value.trim();
-  if (!msg) return;
-  if (!currentUser) { showToast('⚠️ יש להתחבר כדי להשתמש ב-AI', 'warning'); return; }
-
-  input.value = '';
-  // Hide welcome screen on first message
-  const welcomeEl = document.querySelector('#aiMessages .ai-welcome');
-  if (welcomeEl) welcomeEl.remove();
-  appendAIMessage(msg, 'user');
-  showAITyping();
-
-  const delay = 350 + Math.random() * 300;
-
-  try {
-    const db = getDB();
-    const freshUser = (db.users && db.users[currentUser.username]) ? db.users[currentUser.username] : currentUser;
-
-    if (typeof DazuraFuse !== 'undefined') {
-      // DazuraFuse: AI מקומי לחלוטין — ללא גישה לרשת
-      const resp = await DazuraFuse.respondAsync(msg, freshUser, db);
-      setTimeout(() => {
-        hideAITyping();
-        appendAIMessage(resp, 'ai');
-        scrollAIToBottom();
-      }, delay);
-    } else {
-      // Fallback ל-DazuraAI בלבד
-      setTimeout(() => {
-        hideAITyping();
-        let response;
-        try {
-          response = DazuraAI.respond(msg, freshUser, db);
-        } catch(e) {
-          response = 'אירעה שגיאה בעיבוד השאלה. נסה שוב.';
-        }
-        appendAIMessage(response, 'ai');
-        scrollAIToBottom();
-      }, delay);
-    }
-  } catch(e) {
-    setTimeout(() => {
-      hideAITyping();
-      appendAIMessage('אירעה שגיאה. נסה שוב.', 'ai');
-    }, delay);
-  }
-}
-
-function appendAIMessage(text, role) {
-  const messages = document.getElementById('aiMessages');
-  if (!messages) return;
-
-  const div = document.createElement('div');
-  div.className = 'ai-msg ' + role;
-  const bubble = document.createElement('div');
-  bubble.className = 'ai-msg-bubble';
-
-  // Safe HTML render: bold + bullets + newlines
-  const safe = text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^[•\-]\s(.+)$/gm, '<span style="display:block;padding-right:4px;">• $1</span>')
-    .replace(/\n/g, '<br>');
-  bubble.innerHTML = safe;
-
-  div.appendChild(bubble);
-  messages.appendChild(div);
-  scrollAIToBottom();
-}
-
-let _typingEl = null;
-function showAITyping() {
-  const messages = document.getElementById('aiMessages');
-  if (!messages) return;
-  _typingEl = document.createElement('div');
-  _typingEl.className = 'ai-msg ai';
-  _typingEl.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
-  messages.appendChild(_typingEl);
-  scrollAIToBottom();
-}
-function hideAITyping() {
-  if (_typingEl) { _typingEl.remove(); _typingEl = null; }
-}
-
-function scrollAIToBottom() {
-  const messages = document.getElementById('aiMessages');
-  if (messages) messages.scrollTop = messages.scrollHeight;
-}
-
-function clearAIChat() {
-  const messages = document.getElementById('aiMessages');
-  if (messages) {
-    messages.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>שיחה חדשה. שאל אותי כל שאלה!</p></div>';
-  }
-  if (typeof DazuraAI !== 'undefined') DazuraAI.clearHistory();
-  if (typeof DazuraFuse !== 'undefined') DazuraFuse.clearHistory();
-}
-
-// Show AI button after login
-function showAIButton() {
-  const btn = document.getElementById('aiFloatBtn');
-  if (btn) btn.style.display = '';
-}
-function hideAIButton() {
-  const btn = document.getElementById('aiFloatBtn');
-  if (btn) btn.style.display = 'none';
-  const panel = document.getElementById('aiPanel');
-  if (panel) panel.classList.remove('open');
-  _aiPanelOpen = false;
-}
 
 // ============================================================
-// SPLASH SETTINGS (ADMIN)
-// ============================================================
-let _selectedSplash = 1;
-function selectSplash(n) {
-  _selectedSplash = n;
-  document.querySelectorAll('.splash-option').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.splash) === n);
-  });
-}
-function openSplashSelector() {
-  const db = getDB();
-  const saved = db.settings?.splashTheme || 1;
-  _selectedSplash = saved;
-  const timing = db.settings?.splashTiming || 2;
-  const inp = document.getElementById('splashTimingInput');
-  const val = document.getElementById('splashTimingVal');
-  if (inp) inp.value = timing;
-  if (val) val.textContent = timing;
-  document.querySelectorAll('.splash-option').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.splash) === saved);
-  });
-  openModal('splashSelectorModal');
-}
-function saveSplashSettings() {
-  const timing = parseInt(document.getElementById('splashTimingInput')?.value || 2);
-  const db = getDB();
-  db.settings.splashTheme = _selectedSplash;
-  db.settings.splashTiming = timing;
-  saveDB(db);
-  closeModal('splashSelectorModal');
-  showToast('✅ הגדרות Splash נשמרו', 'success');
-}
-
-
-// ============================================================
-// 📋 HANDOVER PROTOCOLS — Manager Tab
+// CUSTOM Q&A MANAGEMENT
 // ============================================================
 
-function renderHandoverList() {
-  const el = document.getElementById('handoverList');
+function renderCustomQAList() {
+  const el = document.getElementById('customQAList');
   if (!el) return;
   const db = getDB();
-  const handovers = db.handovers || {};
-  const today = new Date().toISOString().split('T')[0];
+  const qa = db.customQA || [];
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'accountant';
-  const isManager = currentUser.role === 'manager' || isUserDeptManager(currentUser.username);
-
-  // Get departments this manager manages
-  const myDepts = (() => {
-    const deptManagers = db.deptManagers || {};
-    return Object.entries(deptManagers)
-      .filter(([dept, mgr]) => mgr === currentUser.username)
-      .map(([dept]) => dept);
-  })();
-
-  const list = Object.values(handovers).filter(h => {
-    if (isAdmin) return true; // admin sees all
-    // Manager sees: explicitly assigned to them, OR employee in their dept
-    if (h.managerUsername === currentUser.username) return true;
-    if (isManager && myDepts.length > 0) {
-      const empUser = db.users[h.user];
-      if (empUser) {
-        const empDepts = Array.isArray(empUser.dept) ? empUser.dept : [empUser.dept].filter(Boolean);
-        return empDepts.some(d => myDepts.includes(d));
-      }
-    }
-    // role=manager with no dept assignment — see all handovers
-    if (currentUser.role === 'manager') return true;
-    return false;
-  }).sort((a, b) => a.date.localeCompare(b.date));
-
-  if (!list.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;font-size:14px;">אין פרוטוקולים ממתינים 🎉</div>';
+  if (!qa.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">אין שאלות מוגדרות עדיין. הוסף שאלות למעלה.</div>';
     return;
   }
 
-  // עדכן badge
-  const badge = document.getElementById('handoverBadge');
-  if (badge) {
-    const newCount = list.filter(h => !h.seenByManager).length;
-    if (newCount > 0) { badge.textContent = newCount + ' חדש'; badge.style.display = 'inline'; }
-    else badge.style.display = 'none';
-  }
-
-  el.innerHTML = list.map(h => {
-    const dateHeb = new Date(h.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long' });
-    const isPast = h.date < today;
-    const seen = h.seenByManager ? '<span style="color:var(--success);font-size:11px;">✅ נקרא</span>' : '<span style="color:var(--warning);font-size:11px;">🔔 חדש</span>';
-    const pastTag = isPast ? '<span style="color:var(--text-muted);font-size:11px;">• עבר</span>' : '';
-    const tasks = h.tasks.map((t,i) => `<div style="font-size:13px;color:var(--text-secondary);padding:3px 0;">${i+1}. ${t}</div>`).join('');
-    const contact = h.contact ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📞 מחליף/ה: ${h.contact}</div>` : '';
-    const key = h.user + '_' + h.date;
-    return `
-      <div style="background:var(--surface2);border-radius:14px;padding:16px;margin-bottom:10px;border-right:4px solid ${isPast ? 'var(--border-strong)' : 'var(--primary)'};opacity:${isPast ? 0.6 : 1}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-          <div>
-            <div style="font-weight:800;font-size:15px;">👤 ${h.fullName}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">📅 ${dateHeb} ${pastTag}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            ${seen}
-            <button onclick="printHandoverPDF('${key}')" style="background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--primary);padding:4px 8px;font-family:'Heebo',sans-serif;" title="שמור כ-PDF">📄 PDF</button>
-            <button onclick="deleteHandover('${key}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);padding:4px;" title="מחק מהתצוגה">🗑️</button>
-          </div>
+  el.innerHTML = qa.map((entry, idx) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:13px;color:var(--primary);">❓ ${entry.question}</div>
+          ${entry.tags ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">🏷️ ${entry.tags}</div>` : ''}
         </div>
-        <div style="border-top:1px solid var(--border);padding-top:10px;">${tasks}${contact}</div>
-      </div>`;
-  }).join('');
-}
-
-function printHandoverPDF(key) {
-  const db = getDB();
-  // חפש ב-archive קודם, אחר כך ב-handovers
-  const h = (db.handoversArchive && db.handoversArchive[key]) || (db.handovers && db.handovers[key]);
-  if (!h) { showToast('פרוטוקול לא נמצא', 'error'); return; }
-
-  const dateHeb = new Date(h.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  const createdHeb = h.createdAt ? new Date(h.createdAt).toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
-  const tasksHtml = h.tasks.map((t,i) =>
-    `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#666;width:28px;">${i+1}.</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${t}</td></tr>`
-  ).join('');
-
-  const win = window.open('', '_blank', 'width=720,height=600');
-  win.document.write(`<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8">
-<title>פרוטוקול העברת מקל — ${h.fullName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-  body{font-family:'Heebo',sans-serif;direction:rtl;margin:0;padding:32px;color:#1e293b;background:#fff;}
-  h1{font-size:22px;font-weight:800;color:#1a56e8;margin-bottom:4px;}
-  .sub{font-size:13px;color:#64748b;margin-bottom:24px;}
-  .card{background:#f8fafc;border-radius:12px;padding:20px 24px;margin-bottom:20px;border:1px solid #e2e8f0;}
-  .label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
-  .value{font-size:15px;font-weight:600;color:#1e293b;}
-  table{width:100%;border-collapse:collapse;margin-top:8px;}
-  .footer{margin-top:32px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;}
-  @media print{body{padding:16px;}}
-</style></head>
-<body>
-<h1>📋 פרוטוקול העברת מקל</h1>
-<div class="sub">נוצר: ${createdHeb}</div>
-<div class="card">
-  <div style="display:flex;gap:32px;flex-wrap:wrap;">
-    <div><div class="label">שם העובד</div><div class="value">👤 ${h.fullName}</div></div>
-    <div><div class="label">תאריך חופשה</div><div class="value">📅 ${dateHeb}</div></div>
-    ${h.contact ? `<div><div class="label">מחליף/ה</div><div class="value">📞 ${h.contact}</div></div>` : ''}
-  </div>
-</div>
-<div class="card">
-  <div class="label">משימות לטיפול</div>
-  <table><tbody>${tasksHtml}</tbody></table>
-</div>
-<div class="footer">Dazura — מערכת ניהול חופשות | הופק אוטומטית</div>
-<script>window.onload=function(){window.print();}<\/script>
-</body></html>`);
-  win.document.close();
-}
-
-// הצג פרוטוקול בדוח האישי של העובד
-function renderMyHandoverCard() {
-  if (!currentUser) return;
-  // רק לעובדים — לא למנהל/אדמין
-  const isEmployee = currentUser.role === 'employee' || !currentUser.role;
-  const btn       = document.getElementById('myHandoverBtn');
-  const mobileBtn = document.getElementById('myHandoverBtnMobile');
-
-  if (!isEmployee) {
-    if (btn)       btn.style.display = 'none';
-    if (mobileBtn) mobileBtn.style.display = 'none';
-    return;
-  }
-
-  const db = getDB();
-  const today = new Date().toISOString().split('T')[0];
-
-  // חפש בarchive ובhandovers
-  const seen = new Set();
-  const myRecords = [
-    ...Object.values(db.handoversArchive || {}),
-    ...Object.values(db.handovers || {})
-  ]
-  .filter(h => h.user === currentUser.username)
-  .filter(h => {
-    const k = h.user + '_' + h.date;
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  })
-  .filter(h => {
-    const vacDates = Array.isArray(h.dates) && h.dates.length > 0 ? h.dates : [h.date];
-    return vacDates.slice().sort().pop() >= today;
-  });
-
-  const hasActive = myRecords.length > 0;
-
-  // כפתור desktop — תמיד גלוי לעובד, כחול כשיש פרוטוקול פעיל
-  if (btn) {
-    btn.style.display = '';
-    btn.style.color = hasActive ? 'var(--primary)' : '';
-    btn.style.fontWeight = hasActive ? '800' : '';
-  }
-
-  // כפתור מובייל — תמיד גלוי לעובד
-  if (mobileBtn) {
-    mobileBtn.style.display = '';
-    mobileBtn.style.color = hasActive ? 'var(--primary)' : '';
-  }
-}
-
-function openMyHandoverPopup() {
-  const db = getDB();
-  const today = new Date().toISOString().split('T')[0];
-
-  const allSources = [
-    ...Object.values(db.handoversArchive || {}),
-    ...Object.values(db.handovers || {})
-  ];
-  const seen2 = new Set();
-  const myRecords = allSources
-    .filter(h => h.user === currentUser.username)
-    .filter(h => {
-      const k = h.user + '_' + h.date;
-      if (seen2.has(k)) return false;
-      seen2.add(k);
-      return true;
-    })
-    .filter(h => {
-      const vacDates = Array.isArray(h.dates) && h.dates.length > 0 ? h.dates : [h.date];
-      return vacDates.slice().sort().pop() >= today;
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  const el = document.getElementById('myHandoverPopupContent');
-  if (!el) return;
-
-  if (!myRecords.length) {
-    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);">אין פרוטוקול פעיל כרגע.</div>';
-    openModal('myHandoverPopup');
-    return;
-  }
-
-  el.innerHTML = `
-    <div style="text-align:center;font-size:32px;margin-bottom:6px;">📋</div>
-    <div class="modal-title" style="justify-content:center;margin-bottom:18px;">פרוטוקול העברת מקל שלי</div>
-  ` + myRecords.map(h => {
-    const vacDates = (Array.isArray(h.dates) && h.dates.length > 0 ? h.dates : [h.date]).slice().sort();
-    const firstDate = vacDates[0];
-    const lastDate  = vacDates[vacDates.length - 1];
-    const totalDays = vacDates.length;
-
-    const fmtDate      = dt => new Date(dt + 'T00:00:00').toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' });
-    const fmtDateShort = dt => new Date(dt + 'T00:00:00').toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-    const rangeLabel   = firstDate === lastDate ? fmtDate(firstDate) : `${fmtDateShort(firstDate)} – ${fmtDate(lastDate)}`;
-
-    const isActive   = today >= firstDate && today <= lastDate;
-    const statusText = isActive ? '🟢 בחופשה עכשיו' : '⏳ מתוכננת';
-    const statusBg   = isActive ? '#dcfce7' : 'var(--primary-light)';
-    const statusClr  = isActive ? '#166534' : 'var(--primary-dark)';
-
-    const tasks = h.tasks.map((t, i) =>
-      `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-        <span style="font-size:12px;color:var(--text-muted);min-width:18px;">${i+1}.</span>
-        <span style="font-size:13px;color:var(--text);">${t}</span>
-      </div>`
-    ).join('');
-
-    const contact = h.contact
-      ? `<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:var(--primary-light);border-radius:10px;">
-           <span style="font-size:18px;">👤</span>
-           <div>
-             <div style="font-size:11px;color:var(--primary-dark);font-weight:700;">ממלא/ת מקום</div>
-             <div style="font-size:14px;font-weight:800;color:var(--text);">${h.contact}</div>
-           </div>
-         </div>`
-      : '';
-
-    return `
-      <div style="background:var(--surface2);border-radius:14px;overflow:hidden;margin-bottom:10px;border:1px solid var(--border);">
-        <div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-size:13px;font-weight:800;color:white;">📅 ${rangeLabel}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.8);margin-top:2px;">${totalDays} יום${totalDays>1?'ים':''}</div>
-          </div>
-          <span style="background:${statusBg};color:${statusClr};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;">${statusText}</span>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button onclick="editCustomQAEntry(${idx})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;">✏️</button>
+          <button onclick="deleteCustomQAEntry(${idx})" style="background:var(--danger-light);color:var(--danger);border:1px solid #fca5a5;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'Heebo',sans-serif;">🗑️</button>
         </div>
-        <div style="padding:14px 16px;">
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">משימות להעברה</div>
-          ${tasks}
-          ${contact}
-          <div style="margin-top:10px;font-size:11px;color:var(--text-muted);">🔒 ישמר עד ${fmtDateShort(lastDate)}</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  openModal('myHandoverPopup');
+      </div>
+      <div style="font-size:13px;color:var(--text);background:var(--surface2);border-radius:8px;padding:8px 12px;">💬 ${entry.answer}</div>
+    </div>
+  `).join('');
 }
 
+function saveCustomQAEntry() {
+  const questionRaw = document.getElementById('qaNewQuestion')?.value.trim();
+  const answer      = document.getElementById('qaNewAnswer')?.value.trim();
+  const tagsRaw     = document.getElementById('qaNewTags')?.value.trim();
 
-function deleteHandover(key) {
-  if (!confirm('להסיר פרוטוקול זה מהתצוגה?')) return;
-  const db = getDB();
-  if (db.handovers && db.handovers[key]) {
-    delete db.handovers[key]; // מוחק מתצוגת מנהל בלבד; archive נשמר
-    saveDB(db);
-    showToast('🗑️ פרוטוקול הוסר מהתצוגה', 'success');
-    renderHandoverList();
+  if (!questionRaw || !answer) {
+    showToast('⚠️ נא למלא שאלה ותשובה', 'warning'); return;
   }
-}
 
-function clearAllHandovers() {
-  if (!confirm('להסיר את כל הפרוטוקולים מהתצוגה?')) return;
+  // Support multiple question phrasings separated by comma
+  const questions = questionRaw.split(',').map(q => q.trim()).filter(Boolean);
+  const primaryQ  = questions[0];
+  const aliases   = questions.slice(1);
+  const tags      = tagsRaw || '';
+
   const db = getDB();
-  const isAdmin = currentUser.role === 'admin';
-  Object.keys(db.handovers || {}).forEach(key => {
-    const h = db.handovers[key];
-    if (isAdmin || h.managerUsername === currentUser.username) {
-      delete db.handovers[key]; // archive נשמר
-    }
-  });
+  if (!db.customQA) db.customQA = [];
+
+  const editIdx = document.getElementById('qaNewQuestion').dataset.editIdx;
+  if (editIdx !== undefined && editIdx !== '') {
+    db.customQA[parseInt(editIdx)] = { question: primaryQ, aliases, answer, tags };
+    showToast('✅ שאלה עודכנה', 'success');
+  } else {
+    db.customQA.push({ question: primaryQ, aliases, answer, tags });
+    showToast('✅ שאלה נוספה ל-AI', 'success');
+  }
+
   saveDB(db);
-  showToast('🗑️ כל הפרוטוקולים הוסרו מהתצוגה', 'success');
-  renderHandoverList();
+  pushToFirebase().catch(() => {});
+  auditLog('custom_qa_save', `שאלה נוספה/עודכנה: "${primaryQ}"`);
+
+  // Clear form
+  document.getElementById('qaNewQuestion').value = '';
+  document.getElementById('qaNewQuestion').removeAttribute('data-edit-idx');
+  document.getElementById('qaNewAnswer').value = '';
+  document.getElementById('qaNewTags').value = '';
+
+  renderCustomQAList();
 }
 
-function exportHandoversExcel() {
+function editCustomQAEntry(idx) {
   const db = getDB();
-  const handovers = db.handovers || {};
-  const today = new Date().toISOString().split('T')[0];
-  const isAdmin = currentUser.role === 'admin';
+  const entry = (db.customQA || [])[idx];
+  if (!entry) return;
 
-  const list = Object.values(handovers).filter(h =>
-    (isAdmin || h.managerUsername === currentUser.username) && h.date >= today
-  ).sort((a, b) => a.date.localeCompare(b.date));
+  const q = document.getElementById('qaNewQuestion');
+  const a = document.getElementById('qaNewAnswer');
+  const t = document.getElementById('qaNewTags');
+  if (!q || !a) return;
 
-  if (!list.length) { showToast('אין פרוטוקולים לייצוא', 'warning'); return; }
+  const allQ = [entry.question, ...(entry.aliases||[])].join(', ');
+  q.value = allQ;
+  q.dataset.editIdx = idx;
+  a.value = entry.answer;
+  if (t) t.value = entry.tags || '';
 
-  // Build CSV (Excel-compatible with BOM for Hebrew)
-  const BOM = '\uFEFF';
-  const headers = ['שם עובד', 'תאריך חופשה', 'משימה 1', 'משימה 2', 'משימה 3', 'מחליף/ה', 'נקרא'];
-  const rows = list.map(h => [
-    h.fullName,
-    h.date,
-    h.tasks[0] || '',
-    h.tasks[1] || '',
-    h.tasks[2] || '',
-    h.contact || '',
-    h.seenByManager ? 'כן' : 'לא'
-  ]);
+  q.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  q.focus();
+}
 
-  const csv = BOM + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+function deleteCustomQAEntry(idx) {
+  const db = getDB();
+  const entry = (db.customQA || [])[idx];
+  if (!entry) return;
+  if (!confirm(`למחוק את השאלה: "${entry.question}"?`)) return;
+  db.customQA.splice(idx, 1);
+  saveDB(db);
+  pushToFirebase().catch(() => {});
+  renderCustomQAList();
+  showToast('🗑️ שאלה נמחקה', 'info');
+}
+
+function exportCustomQA() {
+  const db = getDB();
+  const qa = db.customQA || [];
+  if (!qa.length) { showToast('אין שאלות לייצוא', 'warning'); return; }
+
+  const BOM = '﻿';
+  const csv = BOM + 'שאלה,ניסוחים נוספים,תשובה,תגיות\n' +
+    qa.map(e => [
+      `"${(e.question||'').replace(/"/g,'""')}"`,
+      `"${(e.aliases||[]).join('|').replace(/"/g,'""')}"`,
+      `"${(e.answer||'').replace(/"/g,'""')}"`,
+      `"${(e.tags||'').replace(/"/g,'""')}"`
+    ].join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
