@@ -758,7 +758,6 @@ function showApp(skipModuleSelector) {
   });
   
   // Firebase button: admin only
-  document.getElementById('firebaseBadge').style.display = currentUser.role === 'admin' ? '' : 'none';
   // כפתור Admin Panel — רק לאדמין
   const adminLink = document.getElementById('adminPanelLink');
   if (adminLink) adminLink.style.display = (currentUser.role === 'admin' || currentUser.role === 'accountant') ? '' : 'none';
