@@ -734,7 +734,9 @@ function showApp(skipModuleSelector) {
   // Determine roles
   const isAdmin      = currentUser.role === 'admin' || currentUser.role === 'accountant';
   const isManager    = currentUser.role === 'manager' || isAdmin || isUserDeptManager(currentUser.username);
-  const hasAdminAccess = isAdmin; // רק admin ו-accountant רואים כרטיסיית ניהול
+  // TAB ניהול — נגיש לאדמין מלא בלבד, או למשתמש עם הרשאות מפורשות
+  // TAB ניהול — admin, accountant, ועובד עם הרשאות מפורשות רואים את הטאב (רק הסעיפים שהוענקו)
+  const hasAdminAccess = currentUser.role === 'admin' || userHasAnyAdminAccess(currentUser.username);
 
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = hasAdminAccess ? '' : 'none';
@@ -3647,7 +3649,6 @@ const PERMISSION_SECTIONS = [
   { key: 'adminPasswordSection',       label: '🔐 שינוי סיסמת ADMIN',        adminOnly: true  },
   { key: 'dataResetSection',           label: '⚠️ איפוס נתונים',             adminOnly: true  },
   { key: 'deptMgmtSection',            label: '🏢 ניהול מחלקות ומנהלים',     adminOnly: false },
-  { key: 'quotaUploadAdminSection',    label: '📥 טעינת מכסות',              adminOnly: false },
   { key: 'employeeListSection',        label: '👥 רשימת עובדים',             adminOnly: false },
   { key: 'allVacationsSection',        label: '📋 כל בקשות החופשה',          adminOnly: false },
   { key: 'approvalRequestsSection',    label: '📨 בקשות אישור',              adminOnly: false },
@@ -3686,6 +3687,10 @@ function canSeeSectionPermission(sectionKey) {
 function applyPermissionsToAdminTab() {
   if (!currentUser) return;
   const isAdmin = currentUser.role === 'admin';
+
+  // auditLogSection תמיד נשלט ע"י role בלבד — לא ניתן להאצלה
+  const auditEl = document.getElementById('auditLogSection');
+  if (auditEl) auditEl.style.display = isAdmin ? '' : 'none';
 
   PERMISSION_SECTIONS.forEach(({ key, adminOnly }) => {
     const el = document.getElementById(key);
@@ -3894,6 +3899,11 @@ function showCeoDashboard() {
   if (cnEl && s.companyName) cnEl.textContent = s.companyName;
 
   populateCeoDashboard();
+
+  // כפתור הודעות — מוצג רק למי שמורשה לשלוח/לנהל הודעות
+  const annBtn = document.getElementById('ceoAnnBtn');
+  if (annBtn) annBtn.style.display = canSendAnnouncement() ? '' : 'none';
+
   setTimeout(checkBirthdays, 800);
   checkHandoverNeeded();
   setTimeout(checkPendingHandovers, 2500);
@@ -4487,6 +4497,7 @@ function renderWhereIsResults() {
 // 📢 CEO ANNOUNCEMENTS MANAGEMENT
 // ============================================================
 function openCeoAnnouncementsModal() {
+  if (!canSendAnnouncement()) { showToast('⛔ אין הרשאה לצפות בהודעות', 'error'); return; }
   const db = getDB();
   const allUsers = Object.values(db.users).filter(u => isUserActive(u) && u.role !== 'admin');
   const ann = db.announcements || [];
@@ -4520,6 +4531,7 @@ function openCeoAnnouncementsModal() {
 }
 
 function deleteAnnouncement(id) {
+  if (!canSendAnnouncement()) { showToast('⛔ אין הרשאה למחוק הודעות', 'error'); return; }
   if (!confirm('למחוק הודעה זו?')) return;
   const db = getDB();
   db.announcements = (db.announcements || []).filter(a => a.id !== id);
@@ -6780,28 +6792,18 @@ async function sendAIMessage() {
     const db = getDB();
     const freshUser = (db.users && db.users[currentUser.username]) ? db.users[currentUser.username] : currentUser;
 
-    if (typeof DazuraFuse !== 'undefined') {
-      // DazuraFuse: קודם AI מקומי, אחר כך Claude API אם צריך
-      const resp = await DazuraFuse.respondAsync(msg, freshUser, db);
-      setTimeout(() => {
-        hideAITyping();
-        appendAIMessage(resp, 'ai');
-        scrollAIToBottom();
-      }, delay);
-    } else {
-      // Fallback ל-DazuraAI בלבד
-      setTimeout(() => {
-        hideAITyping();
-        let response;
-        try {
-          response = DazuraAI.respond(msg, freshUser, db);
-        } catch(e) {
-          response = 'אירעה שגיאה בעיבוד השאלה. נסה שוב.';
-        }
-        appendAIMessage(response, 'ai');
-        scrollAIToBottom();
-      }, delay);
-    }
+    // DazuraAI v5 — pipeline מלא כולל Fuse
+    setTimeout(() => {
+      hideAITyping();
+      let response;
+      try {
+        response = DazuraAI.respond(msg, freshUser, db);
+      } catch(e) {
+        response = 'אירעה שגיאה בעיבוד השאלה. נסה שוב.';
+      }
+      appendAIMessage(response, 'ai');
+      scrollAIToBottom();
+    }, delay);
   } catch(e) {
     setTimeout(() => {
       hideAITyping();
