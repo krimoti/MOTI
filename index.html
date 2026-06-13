@@ -2830,29 +2830,29 @@ function executePrint(){
     });
   }
 
-  // Step 5: Print
-  setTimeout(()=>{
-    window.print();
-    // Step 6: Cleanup
-    setTimeout(()=>{
-      document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('print-show'));
-      // Restore DEL column
-      hiddenCells.forEach(item=>{
-        if(item.type==='col'){item.el.style.width=item.el._origWidth||'40px';item.el.style.display='';}
-        else{item.el.style.display=item.el._origDisplay||'';}
-      });
-      // Restore spans
-      spans.forEach(s=>{
-        if(!s) return;
-        if(s.el){
-          s.el.remove();
-          if(s.wnoInp) s.wnoInp.style.display='';
-        } else if(s && s.remove) {
-          s.remove();
-        }
-      });
-    },1500);
-  },300);
+  // Step 5: Print — direct call (no setTimeout) for Chrome Mobile compatibility
+  window.print();
+
+  // Step 6: Cleanup after print (afterprint event or fallback)
+  function _printCleanup(){
+    document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('print-show'));
+    hiddenCells.forEach(item=>{
+      if(item.type==='col'){item.el.style.width=item.el._origWidth||'40px';item.el.style.display='';}
+      else{item.el.style.display=item.el._origDisplay||'';}
+    });
+    spans.forEach(s=>{
+      if(!s) return;
+      if(s.el){s.el.remove();if(s.wnoInp)s.wnoInp.style.display='';}
+      else if(s&&s.remove){s.remove();}
+    });
+  }
+  // afterprint fires on desktop; on Chrome Mobile use setTimeout fallback
+  window.addEventListener('afterprint',function _onAfterPrint(){
+    window.removeEventListener('afterprint',_onAfterPrint);
+    _printCleanup();
+  });
+  // Fallback for Chrome Mobile where afterprint may not fire
+  setTimeout(_printCleanup, 2000);
 }
 function exportSelectedCSV(){exportWiringCSV();closePrintModal();}
 function exportWiringCSV(){
