@@ -432,6 +432,8 @@ td.od-err:hover::after,td.od-wrn:hover::after{opacity:1;}
 }
 .wno-input{display:none!important;}
 @media print{
+  @page{margin:10mm;size:A3 landscape;}
+
   /* ── Base resets ── */
   *{
     -webkit-print-color-adjust:exact!important;
@@ -915,6 +917,9 @@ body::after{
   display:none;
 }
 @media print{
+  /* Chrome: force background colors in print */
+  * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+
   /* ── Detail Sheets print — full page per sheet ── */
   #dsSheetsContainer .ds-toolbar,
   #dsSheetsContainer [style*="grid-template-columns:115px"] > div:first-child,
@@ -1541,21 +1546,7 @@ body::after{
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
   <div class="sys-section">
     <h3>🔩 DB TERM</h3>
-    <div style="background:#f0f8ff;border:1px solid #c8d4e0;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;line-height:1.6;">
-  <div style="font-weight:700;color:#1a3a6c;margin-bottom:6px;">📐 Column Guide — DB TERM</div>
-  <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;">
-    <span style="font-weight:600;color:#2980b9;">TYPE</span><span>Terminal/pin name — must match exactly what you type in PIN TYPE column of Wiring List</span>
-    <span style="font-weight:600;color:#2980b9;">PIN P/N</span><span>Manufacturer part number (auto-fills in Wiring List)</span>
-    <span style="font-weight:600;color:#2980b9;">Exp.</span><span>Wire exposure / strip length (mm) — length of conductor exposed after stripping insulation</span>
-    <span style="font-weight:600;color:#e74c3c;">OD↓ / OD↑</span><span>Insulation outer diameter range (mm) — wire OD must be within this range to crimp correctly. <em>Example: D38999 socket: OD↓=1.6, OD↑=2.4</em></span>
-    <span style="font-weight:600;color:#e74c3c;">AWG↓ / AWG↑</span><span>AWG range accepted by this terminal. AWG↓=smallest (thickest), AWG↑=largest (thinnest). <em>Example: 22D contact: AWG↓=22, AWG↑=26</em></span>
-    <span style="font-weight:600;color:#e74c3c;">Volt↑</span><span>Maximum voltage rating of this terminal (V). Wire voltage must not exceed this value. <em>Example: Molex SL: Volt↑=250</em></span>
-  </div>
-  <div style="margin-top:8px;padding-top:6px;border-top:1px solid #dde4ef;color:#666;">
-    ⚡ Leave any field at 0 or empty to skip that validation check. Only filled fields are validated.
-  </div>
-</div>
-<table class="db-table"><thead><tr><th>TYPE</th><th>PIN P/N</th><th style="width:80px">Exposure</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbTermBody"></tbody></table>
+    <table class="db-table"><thead><tr><th>TYPE</th><th>PIN P/N</th><th style="width:80px">Exposure</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbTermBody"></tbody></table>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
       <button class="btn btn-sm btn-green" onclick="addDBTermRow()">＋ Add</button>
       <label class="btn btn-sm btn-blue" style="cursor:pointer;">📥 CSV<input type="file" hidden onchange="importDBCSV(this,'term')"></label>
@@ -1577,21 +1568,7 @@ body::after{
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
   <div class="sys-section">
     <h3>🏷️ DB MARKER <small style="font-weight:400;font-size:10px;">(substring match)</small></h3>
-    <div style="background:#f0f8ff;border:1px solid #c8d4e0;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;line-height:1.6;">
-  <div style="font-weight:700;color:#1a3a6c;margin-bottom:6px;">📐 Column Guide — DB WIRE</div>
-  <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;">
-    <span style="font-weight:600;color:#2980b9;">Wire Size</span><span>Wire identifier — must match what you type in WIRE SIZE column of Wiring List (e.g. RED_22AWG_600V)</span>
-    <span style="font-weight:600;color:#2980b9;">Wire P/N</span><span>Manufacturer part number (auto-fills in Wiring List)</span>
-    <span style="font-weight:600;color:#2980b9;">Unit</span><span>AWG or mm² — affects how AWG compatibility is calculated</span>
-    <span style="font-weight:600;color:#e74c3c;">OD (mm)</span><span>Total outer diameter including insulation (mm). Used to verify crimp compatibility. <em>Example: 22AWG 600V PVC ≈ 2.0mm</em></span>
-    <span style="font-weight:600;color:#e74c3c;">Volt (V)</span><span>Voltage rating of wire insulation. <em>Example: 300V PVC, 600V PTFE, 1000V Tefzel</em></span>
-    <span style="font-weight:600;color:#e74c3c;">AWG</span><span>Explicit AWG number (overrides parsing from name). <em>Example: 22</em></span>
-  </div>
-  <div style="margin-top:8px;padding-top:6px;border-top:1px solid #dde4ef;color:#666;">
-    ⚡ Leave OD, Volt, AWG at 0 to skip those validation checks. Only filled fields are validated against DB TERM.
-  </div>
-</div>
-<table class="db-table"><thead><tr><th>Wire Size</th><th>Marker P/N</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbMarkerBody"></tbody></table>
+    <table class="db-table"><thead><tr><th>Wire Size</th><th>Marker P/N</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbMarkerBody"></tbody></table>
     <button class="btn btn-sm btn-green" onclick="addDBMarkerRow()">＋ Add</button>
   </div>
   <div class="sys-section">
@@ -6228,8 +6205,8 @@ const KMS_HELP = {
       title: 'Database',
       sections: [
         { head: 'Purpose', body: 'The Database stores your component library. When you select a terminal type or wire size in the Wiring List, the tool auto-fills the P/N and exposure values from here.' },
-        { head: 'DB TERM', body: 'Terminal/pin types. Columns: TYPE (what you type in PIN TYPE column), PIN P/N (auto-filled part number), Exposure (wire exposure length in mm).\nExample: TYPE=SKT 20-22AWG SIG, P/N=39-00-0047, Exposure=5' },
-        { head: 'DB WIRE', body: 'Wire types. Columns: SIZE (what you type in WIRE SIZE column), WIRE P/N (auto-filled part number).\nExample: SIZE=RED_22AWG_300V, P/N=M22759/32-22-2' },
+        { head: 'DB TERM', body: 'Terminal/pin types. Each row defines one terminal type and its acceptance range for crimping validation.\n\nColumns:\n• TYPE — exact name you type in PIN TYPE column of Wiring List\n• PIN P/N — manufacturer part number (auto-filled)\n• Exp. — wire exposure / strip length (mm)\n• OD↓ / OD↑ — min/max insulation outer diameter (mm). Wire OD must fall within this range. Leave 0 to skip.\n• AWG↓ / AWG↑ — AWG range accepted. AWG↓=thickest (e.g. 20), AWG↑=thinnest (e.g. 26). Leave 0 to skip.\n• Volt↑ — maximum voltage rating (V). Wire voltage must not exceed this. Leave 0 to skip.\n\nExample: TYPE=M22520/2 socket 22D, OD↓=1.2, OD↑=1.8, AWG↓=22, AWG↑=26, Volt↑=600' },
+        { head: 'DB WIRE', body: 'Wire types. Each row defines one wire and its electrical/physical properties for crimping validation.\n\nColumns:\n• SIZE — exact name you type in WIRE SIZE column of Wiring List\n• Wire P/N — manufacturer part number (auto-filled)\n• Unit — AWG or mm² (affects AWG compatibility calculation)\n• OD (mm) — total outer diameter including insulation. Used to verify crimp compatibility.\n• Volt (V) — insulation voltage rating (e.g. 300, 600, 1000)\n• AWG — explicit AWG number (overrides parsing from name)\n\nValidation rule: if wire OD > terminal OD↑ → error (too thick). If wire OD < terminal OD↓ → warning (may slip). Same logic for AWG and Voltage.\n\nLeave any field at 0 = skip that check.\n\nExample: SIZE=RED_22AWG_600V, OD=2.0, Volt=600, AWG=22' },
         { head: 'DB Connectors', body: 'Connector library. Columns: Name (connector ID), P/N, Pins (total pin count), Rows, Cols, Shape.\n• Rows/Cols: define the pin grid layout for Connector Face View\n• Shape: Grid (rectangular), Circular (round connectors like MIL-38999), D-Sub\n• Leave Rows/Cols at 0 for automatic layout' },
         { head: 'Import/Export', body: 'Export your DB to CSV for backup or sharing. Import CSV files to load a component library. Format: TYPE,PIN_PN,EXPOSURE for terminals; SIZE,WIRE_PN for wires.' },
       ]
@@ -6238,8 +6215,8 @@ const KMS_HELP = {
       title: 'מסד נתונים',
       sections: [
         { head: 'מטרה', body: 'ה-Database שומר את ספריית הרכיבים שלך. כשבוחרים סוג נעל או גודל חוט ברשימת החיווט, הכלי ממלא אוטומטית את מספר החלק וחשיפת החוט מכאן.' },
-        { head: 'DB TERM', body: 'סוגי נעליים/פינים. עמודות: TYPE (מה שמקלידים בעמודת PIN TYPE), PIN P/N (מספר חלק אוטומטי), Exposure (אורך חשיפת חוט במ"מ).\nדוגמה: TYPE=SKT 20-22AWG SIG, P/N=39-00-0047, Exposure=5' },
-        { head: 'DB WIRE', body: 'סוגי חוטים. עמודות: SIZE (מה שמקלידים בעמודת WIRE SIZE), WIRE P/N (מספר חלק אוטומטי).\nדוגמה: SIZE=RED_22AWG_300V, P/N=M22759/32-22-2' },
+        { head: 'DB TERM', body: 'סוגי נעליים/פינים. כל שורה מגדירה נעל אחת וטווח קבלה שלה לולידציית לחיצה.\n\nעמודות:\n• TYPE — שם מדויק שמקלידים בעמודת PIN TYPE ברשימת החיווט\n• PIN P/N — מספר חלק (ממולא אוטומטית)\n• Exp. — אורך חשיפת חוט / פיסול (מ"מ)\n• OD↓ / OD↑ — קוטר בידוד מינימלי/מקסימלי (מ"מ). ה-OD של החוט חייב להיות בטווח זה. השאר 0 לדילוג.\n• AWG↓ / AWG↑ — טווח AWG מקובל. AWG↓=עבה ביותר (למשל 20), AWG↑=דק ביותר (למשל 26). השאר 0 לדילוג.\n• Volt↑ — מתח מקסימלי (V). מתח החוט לא יעלה על ערך זה. השאר 0 לדילוג.\n\nדוגמה: TYPE=M22520/2 socket 22D, OD↓=1.2, OD↑=1.8, AWG↓=22, AWG↑=26, Volt↑=600' },
+        { head: 'DB WIRE', body: 'סוגי חוטים. כל שורה מגדירה חוט ומאפייניו הפיזיקליים/חשמליים לולידציית לחיצה.\n\nעמודות:\n• SIZE — שם מדויק שמקלידים בעמודת WIRE SIZE ברשימת החיווט\n• Wire P/N — מספר חלק (ממולא אוטומטית)\n• Unit — AWG או mm² (משפיע על חישוב התאמת AWG)\n• OD (מ"מ) — קוטר חיצוני כולל בידוד. משמש לאימות התאמת לחיצה.\n• Volt (V) — דירוג מתח הבידוד (למשל 300, 600, 1000)\n• AWG — מספר AWG מפורש (דורס ניתוח מהשם)\n\nכלל ולידציה: אם OD חוט > OD↑ נעל → שגיאה (עבה מדי). אם OD חוט < OD↓ → אזהרה (עלול להחליק). אותו היגיון ל-AWG ו-Voltage.\n\nהשאר שדה ב-0 = דילוג על בדיקה זו.\n\nדוגמה: SIZE=RED_22AWG_600V, OD=2.0, Volt=600, AWG=22' },
         { head: 'DB Connectors', body: 'ספריית קונקטורים. עמודות: שם (מזהה קונקטור), P/N, פינים (סה"כ פינים), שורות, עמודות, צורה.\n• שורות/עמודות: מגדירים את פריסת רשת הפינים לתצוגת פני הקונקטור\n• צורה: Grid (מלבני), Circular (קונקטורים עגולים כמו MIL-38999), D-Sub\n• השאר שורות/עמודות על 0 ל-layout אוטומטי' },
         { head: 'ייבוא/ייצוא', body: 'ייצא את ה-DB ל-CSV לגיבוי או שיתוף. ייבא קבצי CSV לטעינת ספריית רכיבים. פורמט: TYPE,PIN_PN,EXPOSURE לנעליים; SIZE,WIRE_PN לחוטים.' },
       ]
