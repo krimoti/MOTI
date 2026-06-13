@@ -6399,16 +6399,10 @@ function loadValSeverity(){
 
 /* ════ BLOCKING ERRORS CHECK ════ */
 function hasBlockingErrors(){
+  // Only block if severity is set to 'error' AND there are actual errors from last validation
   if(_valSeverity!=='error') return false;
-  const rows=getRows();
-  for(const r of rows){
-    const ws=(r.wireSize||'').trim();
-    for(const termStr of [r.pin1type,r.pin2type]){
-      if(!ws||!termStr) continue;
-      if(checkAWGcompat(ws,termStr.trim())) return true;
-    }
-  }
-  return false;
+  // Use last validation run result — don't re-run checks here
+  return (_lastValErrors||0) > 0;
 }
 
 function warnBlockingErrors(){
