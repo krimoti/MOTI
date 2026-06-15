@@ -922,6 +922,9 @@ body::after{
 @media print{
   /* Chrome: force background colors in print */
   * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+  /* Show only selected tabs when printing */
+  .tab-content { display:none!important; }
+  .tab-content.print-show { display:block!important; width:100%!important; overflow:visible!important; }
 
   /* ── Detail Sheets print — full page per sheet ── */
   #dsSheetsContainer .ds-toolbar,
@@ -1549,7 +1552,7 @@ body::after{
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
   <div class="sys-section">
     <h3>🔩 DB TERM</h3>
-    <table class="db-table"><thead><tr><th>TYPE</th><th>PIN P/N</th><th style="width:52px" title="Wire exposure mm">Exposure</th><th style="width:58px" title="Min insulation OD (mm)">O.D min</th><th style="width:58px" title="Max insulation OD (mm)">O.D max</th><th style="width:48px" title="Min AWG accepted">AWG↓</th><th style="width:48px" title="Max AWG accepted">AWG↑</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbTermBody"></tbody></table>
+    <table class="db-table"><thead><tr><th>TYPE</th><th>PIN P/N</th><th style="width:52px" title="Wire exposure mm">Exposure</th><th style="width:58px" title="Min insulation OD (mm)">O.D min</th><th style="width:58px" title="Max insulation OD (mm)">O.D max</th><th style="width:48px" title="Min AWG accepted">AWG↓</th><th style="width:48px" title="Max AWG accepted">AWG↑</th><th style="width:80px" title="Twin wire support: none=single wire only, same=twin ferrule (identical AWG), range=ring/fork terminal (combined cross-section check)">Twin</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbTermBody"></tbody></table>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
       <button class="btn btn-sm btn-green" onclick="addDBTermRow()">＋ Add</button>
       <label class="btn btn-sm btn-blue" style="cursor:pointer;">📥 CSV<input type="file" hidden onchange="importDBCSV(this,'term')"></label>
@@ -2262,6 +2265,7 @@ function handleLogo(input){const r=new FileReader();r.onload=e=>{document.getEle
         oninput="dbTerm[${i}].${field}=parseFloat(this.value)||0;markDirty()"
         title="${title}"
         style="width:100%;padding:3px;border:1px solid #c8d4e0;border-radius:6px;font-size:12px;text-align:center;">`;
+    const tv=r.twinType||'none';
     tr.innerHTML=`
       <td><input value="${escH(r.type)}" oninput="dbTerm[${i}].type=this.value;refreshDBLists();markDirty()"></td>
       <td><input value="${escH(r.pn||'')}" oninput="dbTerm[${i}].pn=this.value;markDirty()"></td>
@@ -2270,13 +2274,20 @@ function handleLogo(input){const r=new FileReader();r.onload=e=>{document.getEle
       <td>${ni('odMax',20,0.1,'Max insulation OD (mm)')}</td>
       <td>${ni('awgMin',40,1,'Min AWG (thickest)')}</td>
       <td>${ni('awgMax',40,1,'Max AWG (thinnest)')}</td>
+      <td><select onchange="dbTerm[${i}].twinType=this.value;markDirty()"
+        title="none=single wire only | same=twin ferrule (identical AWG) | range=ring/fork (combined cross-section)"
+        style="padding:3px 4px;border:1px solid #c8d4e0;border-radius:6px;font-size:11px;width:100%;">
+        <option value="none" ${tv==='none'?'selected':''}>— none</option>
+        <option value="same" ${tv==='same'?'selected':''}>✦ same AWG</option>
+        <option value="range" ${tv==='range'?'selected':''}>↔ range</option>
+      </select></td>
       <td class="no-print" style="text-align:center;">
         <button class="btn-delete" style="margin:0" onclick="delDBTermRow(${i})">🗑</button>
       </td>`;
     b.appendChild(tr);
   });
 }
-function addDBTermRow(){dbTerm.push({type:'',pn:'',exp:0,odMin:0,odMax:0,awgMin:0,awgMax:0});renderDBTerm();markDirty();}
+function addDBTermRow(){dbTerm.push({type:'',pn:'',exp:0,odMin:0,odMax:0,awgMin:0,awgMax:0,twinType:'none'});renderDBTerm();markDirty();}
 function delDBTermRow(i){dbTerm.splice(i,1);renderDBTerm();updateWiringLookups();markDirty();}
 function renderDBWire(){
   const b=document.getElementById('dbWireBody');
@@ -2376,13 +2387,18 @@ function rowLookup(tr, fromImport){
   const setIfMatch=(dataCol,val)=>{
     const e=inp(dataCol); if(!e) return;
     if(fromImport && e.value.trim() && !val) return;
-    if(val!==undefined && val!==''){e.value=val; e.classList.add('auto-filled');}
+    if(val!==undefined && val!==''){
+      e.value=val; e.classList.add('auto-filled');
+    } else if(!fromImport && val===''){
+      // Clear auto-filled values only (don't clear manually entered)
+      e.value=''; e.classList.remove('auto-filled');
+    }
   };
 
   // PIN 1 TYPE (data-col 4) → lookup terminal → fill PIN1 P/N (col3), EXP A (col1)
   const p1=inp(4)?.value.trim().toLowerCase();
   const t1=p1 ? dbTerm.find(r=>r.type.toLowerCase()===p1) : null;
-  if(t1){ setIfMatch(3,t1.pn); setIfMatch(1,t1.exposure); }
+  if(t1){ setIfMatch(3,t1.pn); setIfMatch(1,t1.exp||t1.exposure||''); }
   else if(!fromImport){ setIfMatch(3,''); setIfMatch(1,''); }
 
   // WIRE SIZE (data-col 6) → lookup wire → fill WIRE P/N (col7)
@@ -2394,7 +2410,7 @@ function rowLookup(tr, fromImport){
   // PIN 2 TYPE (data-col 11) → lookup terminal → fill PIN2 P/N (col12), EXP B (col14)
   const p2=inp(11)?.value.trim().toLowerCase();
   const t2=p2 ? dbTerm.find(r=>r.type.toLowerCase()===p2) : null;
-  if(t2){ setIfMatch(12,t2.pn); setIfMatch(14,t2.exposure); }
+  if(t2){ setIfMatch(12,t2.pn); setIfMatch(14,t2.exp||t2.exposure||''); }
   else if(!fromImport){ setIfMatch(12,''); setIfMatch(14,''); }
 
   refreshConnGroups();
@@ -2616,7 +2632,7 @@ function runValidation(){
   /* ── ^ (caret) twin wire combined cross-section check ── */
   checkTwinWires(rows).forEach(iss=>issues.push(iss));
   /* ── Twin wire combined cross-section check ── */
-  checkTwinWires().forEach(iss=>issues.push(iss));
+
 
   /* ── Twin wire combined cross-section check (^ rows) ── */
   checkTwinWireRows().forEach(iss=>issues.push(iss));
@@ -7872,70 +7888,6 @@ const AWG_MM2={32:.0324,30:.0507,28:.0804,26:.128,24:.205,22:.325,
                20:.519,18:.823,16:1.31,14:2.08,12:3.31,10:5.26,
                8:8.37,6:13.3,4:21.2,2:33.6,1:42.4,0:53.5};
 
-function awgToMM2(awgNum){
-  if(AWG_MM2[awgNum]!==undefined) return AWG_MM2[awgNum];
-  // Interpolate
-  const keys=Object.keys(AWG_MM2).map(Number).sort((a,b)=>a-b);
-  for(let i=0;i<keys.length-1;i++){
-    if(awgNum>=keys[i]&&awgNum<=keys[i+1]){
-      const t=(awgNum-keys[i])/(keys[i+1]-keys[i]);
-      return AWG_MM2[keys[i]]+(AWG_MM2[keys[i+1]]-AWG_MM2[keys[i]])*t;
-    }
-  }
-  return 0;
-}
-
-function getWireAWGnum(wireSize){
-  // Check DB first
-  const wDB=dbWire.find(w=>w.size&&(wireSize===w.size||wireSize.includes(w.size)));
-  if(wDB&&wDB.awgNum>0) return parseInt(wDB.awgNum);
-  // Parse from name
-  const pa=parseAllAWG(wireSize);
-  return pa.length?pa[0].min:0;
-}
-
-function checkTwinWires(){
-  const rows=getRows();
-  const issues=[];
-
-  rows.forEach((r,idx)=>{
-    // Find rows where pin1type or pin2type = '^'
-    const p1=r.pin1type?.trim(), p2=r.pin2type?.trim();
-
-    // Check PIN1 side
-    if(p1==='^' && idx>0){
-      // Find the parent row (most recent non-^ row above)
-      let parentRow=null;
-      for(let k=idx-1;k>=0;k--){
-        const pt=rows[k].pin1type?.trim();
-        if(pt&&pt!=='^'){parentRow=rows[k];break;}
-      }
-      if(parentRow){
-        const termType=parentRow.pin1type?.trim();
-        const iss=_checkCombinedAWG(r.wireNo,parentRow.wireNo,
-          r.wireSize,parentRow.wireSize,termType,'PIN1');
-        if(iss) issues.push(iss);
-      }
-    }
-
-    // Check PIN2 side
-    if(p2==='^' && idx>0){
-      let parentRow=null;
-      for(let k=idx-1;k>=0;k--){
-        const pt=rows[k].pin2type?.trim();
-        if(pt&&pt!=='^'){parentRow=rows[k];break;}
-      }
-      if(parentRow){
-        const termType=parentRow.pin2type?.trim();
-        const iss=_checkCombinedAWG(r.wireNo,parentRow.wireNo,
-          r.wireSize,parentRow.wireSize,termType,'PIN2');
-        if(iss) issues.push(iss);
-      }
-    }
-  });
-  return issues;
-}
-
 function _checkCombinedAWG(wireNo1,wireNo2,wireSize1,wireSize2,termType,side){
   if(!termType||!wireSize1||!wireSize2) return null;
 
@@ -7979,135 +7931,144 @@ function _checkCombinedAWG(wireNo1,wireNo2,wireSize1,wireSize2,termType,side){
   return null;
 }
 
-/* ════ TWIN WIRE VALIDATION (^ symbol) ════
-   When PIN TYPE = "^", the wire shares the terminal above it.
-   Validates combined AWG/OD cross-section against terminal limits.
-   ════════════════════════════════════════════════════════════ */
 
-// AWG → mm² cross-section (conductor only, standard IEC 60228)
-const AWG_TO_MM2 = {
-  40:0.013, 38:0.020, 36:0.032, 34:0.050, 32:0.080,
-  30:0.126, 28:0.200, 26:0.318, 24:0.510, 22:0.810,
-  20:1.31,  18:2.08,  16:3.31,  14:5.26,  12:8.37,
-  10:13.3,  8:21.1,   6:33.6,   4:53.5,   2:85.0,
+/* ── Twin wire helper functions ── */
+const AWG_TO_MM2={
+  40:0.013,38:0.020,36:0.032,34:0.050,32:0.080,
+  30:0.126,28:0.200,26:0.318,24:0.510,22:0.810,
+  20:1.31, 18:2.08, 16:3.31, 14:5.26, 12:8.37,
+  10:13.3,  8:21.1,  6:33.6,  4:53.5,  2:85.0,
   1:107.2,  0:135.0
 };
-
 function awgToMM2(awgNum){
   const n=Math.round(awgNum);
-  return AWG_TO_MM2[n] || Math.pow(10, (AWG_TO_MM2[22]===undefined?-1:(36-n)/19.6));
+  if(AWG_TO_MM2[n]!==undefined) return AWG_TO_MM2[n];
+  // Interpolate for non-standard
+  return Math.pow(10,(36-n)/19.6)*0.0127;
 }
-
 function mm2ToAWGapprox(mm2){
-  // Find closest AWG
-  let best=22, bestDiff=999;
+  let best=22,bestDiff=999;
   Object.entries(AWG_TO_MM2).forEach(([awg,m])=>{
     const diff=Math.abs(m-mm2);
     if(diff<bestDiff){bestDiff=diff;best=parseInt(awg);}
   });
   return best;
 }
-
 function getWireAWGnum(wireSize){
-  // Try DB first (explicit awgNum field)
   const wDB=dbWire.find(w=>w.size&&wireSize&&(w.size===wireSize||wireSize.includes(w.size)));
-  if(wDB&&wDB.awgNum&&wDB.awgNum>0) return parseInt(wDB.awgNum);
-  // Parse from name
+  if(wDB&&wDB.awgNum&&parseInt(wDB.awgNum)>0) return parseInt(wDB.awgNum);
   const pa=parseAllAWG(wireSize);
-  if(pa.length) return pa[0].min;
-  return 0;
+  return pa.length?pa[0].min:0;
 }
-
 function getWireOD(wireSize){
   const wDB=dbWire.find(w=>w.size&&wireSize&&(w.size===wireSize||wireSize.includes(w.size)));
-  return wDB&&wDB.od>0 ? parseFloat(wDB.od) : 0;
+  return wDB&&parseFloat(wDB.od)>0?parseFloat(wDB.od):0;
 }
-
 function getTermRange(termType){
   const tDB=dbTerm.find(t=>t.type&&termType&&(t.type===termType||termType.includes(t.type)));
   if(!tDB) return null;
-  return {
-    awgMin: parseInt(tDB.awgMin)||0,
-    awgMax: parseInt(tDB.awgMax)||0,
-    odMin:  parseFloat(tDB.odMin)||0,
-    odMax:  parseFloat(tDB.odMax)||0
-  };
+  return{awgMin:parseInt(tDB.awgMin)||0,awgMax:parseInt(tDB.awgMax)||0,
+    odMin:parseFloat(tDB.odMin)||0,odMax:parseFloat(tDB.odMax)||0,
+    twinType:tDB.twinType||'none'};
 }
+
+/* ════ TWIN WIRE VALIDATION (^ symbol) ════
+   When PIN TYPE = "^", wire shares terminal with the row above.
+   Three modes based on DB TERM twinType field:
+   - none: no twin allowed → error
+   - same: twin ferrule → both wires must have identical AWG
+   - range: ring/fork terminal → combined cross-section must not exceed max
+   ════════════════════════════════════════════════════════════ */
 
 function checkTwinWires(rows){
   const issues=[];
 
   rows.forEach((r,idx)=>{
-    // Check each side (pin1, pin2)
-    [['pin1type','cmp1','wireSize',1],['pin2type','cmp2','wireSize',2]].forEach(([pinField,cmpField,wsField,side])=>{
+    [['pin1type','wireSize',1],['pin2type','wireSize',2]].forEach(([pinField,wsField,side])=>{
       const termVal=(r[pinField]||'').trim();
-      if(termVal!=='^') return; // only process ^ rows
+      if(termVal!=='^') return;
 
-      // Find the row above that has a real terminal
+      // Find nearest parent row with real terminal on same side
       let parentRow=null, parentTerm='';
       for(let k=idx-1;k>=0;k--){
         const candidate=(rows[k][pinField]||'').trim();
         if(candidate&&candidate!=='^'){
-          parentRow=rows[k];
-          parentTerm=candidate;
-          break;
+          parentRow=rows[k]; parentTerm=candidate; break;
         }
       }
       if(!parentRow||!parentTerm) return;
 
-      // Get both wire sizes
+      // Get terminal DB entry
+      const tDB=dbTerm.find(t=>t.type&&(t.type===parentTerm||parentTerm.includes(t.type)));
+      const twinType=(tDB?.twinType)||'none';
+
       const ws1=(parentRow[wsField]||'').trim();
       const ws2=(r[wsField]||'').trim();
-      if(!ws1||!ws2) return;
+      const wires=`${parentRow.wireNo}+${r.wireNo}`;
 
-      // Get terminal range
-      const term=getTermRange(parentTerm);
-      if(!term) return;
-
-      const awg1=getWireAWGnum(ws1);
-      const awg2=getWireAWGnum(ws2);
-      const od1=getWireOD(ws1);
-      const od2=getWireOD(ws2);
-
-      // ── AWG combined cross-section check ──
-      if(awg1>0&&awg2>0&&(term.awgMin>0||term.awgMax>0)){
-        const mm2_1=awgToMM2(awg1);
-        const mm2_2=awgToMM2(awg2);
-        const mm2_total=mm2_1+mm2_2;
-
-        // Terminal max capacity = mm² of its thickest allowed wire
-        const termMaxMM2=term.awgMin>0 ? awgToMM2(term.awgMin) : 0;
-        const termMinMM2=term.awgMax>0 ? awgToMM2(term.awgMax) : 0;
-
-        if(termMaxMM2>0&&mm2_total>termMaxMM2*1.05){
-          issues.push({type:'err',
-            wireNo:`${parentRow.wireNo}+${r.wireNo}`,
-            msg:`Twin wire combined ${mm2_total.toFixed(2)}mm² (AWG${awg1}+AWG${awg2}) exceeds terminal "${parentTerm}" max ${termMaxMM2.toFixed(2)}mm² (AWG${term.awgMin}) — too thick for crimp`
-          });
-        } else if(termMinMM2>0&&mm2_total<termMinMM2*0.5){
-          issues.push({type:'wrn',
-            wireNo:`${parentRow.wireNo}+${r.wireNo}`,
-            msg:`Twin wire combined ${mm2_total.toFixed(2)}mm² (AWG${awg1}+AWG${awg2}) may be too thin for terminal "${parentTerm}"`
-          });
-        }
+      // ── CASE 1: none — no twin allowed ──
+      if(twinType==='none'){
+        issues.push({type:'err', wireNo:wires,
+          msg:`PIN ${side} "${parentTerm}": does not support twin wires (set Twin=same or range in DB TERM if it does)`});
+        return;
       }
 
-      // ── OD combined check (if both ODs defined) ──
-      if(od1>0&&od2>0&&term.odMax>0){
-        // Approximate: combined OD ≈ √(OD1²+OD2²) for side-by-side
-        const combinedOD=Math.sqrt(od1*od1+od2*od2);
-        if(combinedOD>term.odMax){
-          issues.push({type:'err',
-            wireNo:`${parentRow.wireNo}+${r.wireNo}`,
-            msg:`Twin wire combined OD ~${combinedOD.toFixed(2)}mm (OD${od1}+OD${od2}) exceeds terminal "${parentTerm}" max OD ${term.odMax}mm`
-          });
+      if(!ws1||!ws2) return;
+      const awg1=getWireAWGnum(ws1);
+      const awg2=getWireAWGnum(ws2);
+
+      // ── CASE 2: same — twin ferrule, both wires must be identical AWG ──
+      if(twinType==='same'){
+        if(awg1>0&&awg2>0&&awg1!==awg2){
+          issues.push({type:'err', wireNo:wires,
+            msg:`PIN ${side} "${parentTerm}" (twin ferrule): requires identical AWG — got AWG${awg1} + AWG${awg2}`});
+        } else if(awg1>0&&tDB?.awgMin>0&&awg1!==parseInt(tDB.awgMin)){
+          // Both wires should match the terminal's rated AWG
+          issues.push({type:'wrn', wireNo:wires,
+            msg:`PIN ${side} "${parentTerm}" (twin ferrule): rated for AWG${tDB.awgMin} but got AWG${awg1}`});
         }
+        // OD check for twin ferrule
+        const od1=getWireOD(ws1), od2=getWireOD(ws2);
+        if(od1>0&&od2>0&&tDB?.odMax>0){
+          const combined=Math.sqrt(od1*od1+od2*od2);
+          if(combined>tDB.odMax){
+            issues.push({type:'err', wireNo:wires,
+              msg:`PIN ${side} "${parentTerm}" (twin ferrule): combined OD ~${combined.toFixed(2)}mm exceeds max ${tDB.odMax}mm`});
+          }
+        }
+        return;
+      }
+
+      // ── CASE 3: range — ring/fork terminal, check combined cross-section ──
+      if(twinType==='range'){
+        if(awg1>0&&awg2>0){
+          const mm2_1=awgToMM2(awg1);
+          const mm2_2=awgToMM2(awg2);
+          const mm2_total=mm2_1+mm2_2;
+          // Terminal capacity = cross-section of its thickest allowed wire (awgMin)
+          const termCapMM2=tDB?.awgMin>0 ? awgToMM2(parseInt(tDB.awgMin)) : 0;
+          if(termCapMM2>0&&mm2_total>termCapMM2*1.05){
+            issues.push({type:'err', wireNo:wires,
+              msg:`PIN ${side} "${parentTerm}": combined ${mm2_total.toFixed(2)}mm² (AWG${awg1}+AWG${awg2}) exceeds terminal capacity ${termCapMM2.toFixed(2)}mm² (AWG${tDB.awgMin})`});
+          }
+        }
+        // OD check
+        const od1=getWireOD(ws1), od2=getWireOD(ws2);
+        if(od1>0&&od2>0&&tDB?.odMax>0){
+          const combined=Math.sqrt(od1*od1+od2*od2);
+          if(combined>tDB.odMax){
+            issues.push({type:'err', wireNo:wires,
+              msg:`PIN ${side} "${parentTerm}": combined OD ~${combined.toFixed(2)}mm exceeds terminal max ${tDB.odMax}mm`});
+          }
+        }
+        return;
       }
     });
   });
 
   return issues;
 }
+
 </script>
 
 <!-- ══ EULA / LICENSE AGREEMENT ══ -->
