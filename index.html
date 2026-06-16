@@ -927,6 +927,9 @@ body::after{
   /* Show only selected tabs when printing */
   .tab-content { display:none!important; }
   .tab-content.print-show { display:block!important; width:100%!important; overflow:visible!important; }
+  /* Suppress validation highlights in print */
+  #wiringBody tr.row-error td,#wiringBody tr.row-warn td{background:inherit!important;border-left:none!important;}
+  .od-err,.od-wrn,.awg-err,.awg-wrn{background:inherit!important;outline:none!important;}
 
   /* ── Detail Sheets print — full page per sheet ── */
   #dsSheetsContainer .ds-toolbar,
@@ -2416,6 +2419,27 @@ function rowLookup(tr, fromImport){
   const t2=p2 ? dbTerm.find(r=>r.type.toLowerCase()===p2) : null;
   if(t2){ setIfMatch(12,t2.pn); setIfMatch(14,t2.exp||t2.exposure||''); }
   else if(!fromImport){ setIfMatch(12,''); setIfMatch(14,''); }
+
+  // ── ^ symbol: copy Exposure from parent row ──
+  const _p1v=(inp(4)?.value||'').trim();
+  const _p2v=(inp(11)?.value||'').trim();
+  if(_p1v==='^'||_p2v==='^'){
+    const _allTrs=[...document.querySelectorAll('#wiringBody tr')];
+    const _myIdx=_allTrs.indexOf(tr);
+    if(_myIdx>0){
+      const _prev=_allTrs[_myIdx-1];
+      if(_p1v==='^'){
+        const _pe=_prev.cells[2]?.querySelector('input')?.value||'';
+        const _me=tr.cells[2]?.querySelector('input');
+        if(_me) _me.value=_pe; // always copy from parent
+      }
+      if(_p2v==='^'){
+        const _pe=_prev.cells[15]?.querySelector('input')?.value||'';
+        const _me=tr.cells[15]?.querySelector('input');
+        if(_me) _me.value=_pe; // always copy from parent
+      }
+    }
+  }
 
   refreshConnGroups();
 }
@@ -6624,27 +6648,30 @@ function checkTwinTerminals(rows){
       }
     }
 
-    // Check combined AWG cross-section
+    // Check combined AWG cross-section — skip if twinType='same' (ferrule designed for 2 wires)
     if(wireSizes.length===2){
+      const _dbT=dbTerm.find(t=>(t.type||'').toLowerCase()===(termTypes[0]||'').toLowerCase());
+      const _tw=(_dbT?.twinType||'').trim();
+      if(_tw==='same'){
+        // Twin ferrule: designed for 2 identical wires — no cross-section check needed
+      } else if(wireSizes.length===2){
       const awgs1=parseAllAWG(wireSizes[0]);
       const awgs2=parseAllAWG(wireSizes[1]);
       const termAWGs=parseAllAWG(termTypes[0]||'');
 
       if(awgs1.length&&awgs2.length&&termAWGs.length){
-        // Get mm² for each wire (approximate from AWG)
-        
         const mm2_1=awgToMM2(awgs1[0].min);
         const mm2_2=awgToMM2(awgs2[0].min);
         const mm2_total=mm2_1+mm2_2;
-        // Terminal rating: smallest AWG in range → largest mm²
-        const termMaxMM2=awgToMM2(termAWGs[0].max); // larger AWG = smaller wire
-        const termMinMM2=awgToMM2(termAWGs[0].min); // smaller AWG = larger wire
+        const termMaxMM2=awgToMM2(termAWGs[0].max);
+        const termMinMM2=awgToMM2(termAWGs[0].min);
 
-        if(mm2_total>termMinMM2*1.1){ // 10% tolerance
+        if(mm2_total>termMinMM2*1.1){
           issues.push({type:'err', wireNo:wireNos,
             msg:`PIN ${pin}: combined cross-section ${mm2_total.toFixed(2)}mm² exceeds terminal max ${termMinMM2.toFixed(2)}mm² (${termTypes[0]})`});
         }
       }
+      } // end else if twinType!='same'
     }
   });
   return issues;
@@ -7824,61 +7851,7 @@ function checkRowOD(tr){
 }
 
 
-/* ════ TWIN WIRE COMBINED CROSS-SECTION CHECK ════ */
-// AWG → mm² cross-section (conductor, standard values)
 
-/* ════ TWIN WIRE TERMINAL VALIDATION ════
-   When a row has '^' in PIN TYPE → same terminal as row above
-   Validates that combined cross-section fits the terminal
-   ════════════════════════════════════════ */
-
-// AWG number → mm² cross-section
-const AWG_MM2={32:.0324,30:.0507,28:.0804,26:.128,24:.205,22:.325,
-               20:.519,18:.823,16:1.31,14:2.08,12:3.31,10:5.26,
-               8:8.37,6:13.3,4:21.2,2:33.6,1:42.4,0:53.5};
-
-function _checkCombinedAWG(wireNo1,wireNo2,wireSize1,wireSize2,termType,side){
-  if(!termType||!wireSize1||!wireSize2) return null;
-
-  // Get AWG numbers for both wires
-  const awg1=getWireAWGnum(wireSize1);
-  const awg2=getWireAWGnum(wireSize2);
-  if(!awg1||!awg2) return null;
-
-  // Get terminal AWG range from DB
-  const tDB=dbTerm.find(t=>t.type&&(t.type===termType||termType.includes(t.type)));
-  if(!tDB) return null;
-
-  const awgMin=parseInt(tDB.awgMin)||0; // thickest (lowest AWG number)
-  const awgMax=parseInt(tDB.awgMax)||0; // thinnest (highest AWG number)
-  if(!awgMin&&!awgMax) return null;
-
-  // Calculate combined cross-section in mm²
-  const mm2_1=awgToMM2(awg1);
-  const mm2_2=awgToMM2(awg2);
-  const combined=mm2_1+mm2_2;
-
-  // Terminal max capacity = mm² of thickest accepted wire (awgMin)
-  const termMaxMM2=awgToMM2(awgMin);
-  // Terminal min = mm² of thinnest wire (awgMax)
-  const termMinMM2=awgToMM2(awgMax);
-
-  if(combined>termMaxMM2*1.05){ // 5% tolerance
-    return{
-      type:'err', wireNo:`${wireNo1}+${wireNo2}`,
-      msg:`${side}: Twin wires ${awg1}+${awg2}AWG = ${combined.toFixed(3)}mm² combined `+
-          `exceeds terminal ${termType} max ${termMaxMM2.toFixed(3)}mm² (AWG${awgMin})`
-    };
-  }
-  if(combined<termMinMM2*0.5){
-    return{
-      type:'wrn', wireNo:`${wireNo1}+${wireNo2}`,
-      msg:`${side}: Twin wires ${awg1}+${awg2}AWG = ${combined.toFixed(3)}mm² combined `+
-          `may be too thin for terminal ${termType} (min AWG${awgMax})`
-    };
-  }
-  return null;
-}
 
 
 
@@ -7957,6 +7930,7 @@ function checkTwinWires(rows){
       const side=pinField==='pin1type'?'PIN1':'PIN2';
 
       // ── same: twin ferrule — both wires must have identical AWG ──
+      // No cross-section check: the ferrule is DESIGNED for two identical wires
       if(twinType==='same'){
         if(awg1>0&&awg2>0&&awg1!==awg2){
           const msg=`${side} "${parentTerm}" (twin ferrule): requires identical AWG — got AWG${awg1}+AWG${awg2}`;
@@ -7964,6 +7938,7 @@ function checkTwinWires(rows){
           if(parentRow.tr) parentRow.tr.classList.add('row-error');
           if(r.tr) r.tr.classList.add('row-error');
         }
+        // AWG matches or not defined → OK, twin ferrule accepts this
         return;
       }
 
