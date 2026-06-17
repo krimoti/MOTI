@@ -249,10 +249,14 @@ input:focus{background:rgba(41,128,185,.06);}
 #mirrorInner{height:1px;}
 .approved-row td{background:#f0faf4!important;}
 .approved-row input{color:#1e7e45!important;font-weight:600;}
-.row-error td{background:#fff5f5!important;}
-#wiringBody tr.row-warn td{background:#fff8e1!important;border-left:3px solid #f39c12!important;}
+/* ── Validation row highlighting (single source of truth) ── */
 #wiringBody tr.row-error td{background:#ffe0e0!important;border-left:3px solid #e74c3c!important;}
-.row-warn td{background:#fffbf0!important;}
+#wiringBody tr.row-warn td{background:#fff8e1!important;border-left:3px solid #f39c12!important;}
+/* Wire-number cell keeps its dark navy / white text even when row is highlighted */
+#wiringBody tr.row-error td.cell-rownum,
+#wiringBody tr.row-warn td.cell-rownum{background:#1a3a6c!important;color:#fff!important;}
+#wiringBody tr.row-error td.cell-rownum .wno-input,
+#wiringBody tr.row-warn td.cell-rownum .wno-input{color:#fff!important;}
 input.auto-filled{background:#edf7f0!important;color:#1a6b4a;font-style:italic;}
 input[readonly].auto-filled{cursor:default;}
 td.cell-rownum{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#1a3a6c!important;color:#fff!important;text-align:center;font-size:11px;font-weight:800;cursor:pointer;width:52px;user-select:none;border-right:2px solid #c8d4e0!important;padding:0;}
@@ -471,6 +475,8 @@ td.od-err:hover::after,td.od-wrn:hover::after{opacity:1;}
     width:410mm!important;
     height:287mm!important;
     box-sizing:border-box!important;
+    page-break-after:always!important;
+    overflow:hidden!important;
   }
   #cover-tab.print-show>.cover-wrap{
     display:table-cell!important;
@@ -479,7 +485,7 @@ td.od-err:hover::after,td.od-wrn:hover::after{opacity:1;}
   }
   #cover-tab .cover-wrap{
     width:307mm!important;
-    min-height:215mm!important;
+    max-height:215mm!important;
     max-width:307mm!important;
     margin:36mm auto!important;
     padding:14mm 18mm!important;
@@ -488,6 +494,7 @@ td.od-err:hover::after,td.od-wrn:hover::after{opacity:1;}
     border-top:6pt solid #1e3a5f!important;
     page-break-inside:avoid!important;
     box-sizing:border-box!important;
+    overflow:hidden!important;
   }
   #cover-tab .cover-title{
     font-size:32pt!important;
@@ -496,8 +503,10 @@ td.od-err:hover::after,td.od-wrn:hover::after{opacity:1;}
     letter-spacing:0.5px!important;
     margin-bottom:6mm!important;
   }
+  #cover-tab .cover-line{margin:4mm 0 6mm!important;}
   #cover-tab .cover-grid{
     font-size:12pt!important;
+    gap:6px 16px!important;
     margin-bottom:8mm!important;
   }
   #cover-tab .cover-grid label{font-size:10pt!important;color:#4a6274!important;}
@@ -507,30 +516,6 @@ td.od-err:hover::after,td.od-wrn:hover::after{opacity:1;}
   #cover-tab .rev-table td{padding:5px 10px!important;border:0.5pt solid #c8d4e0!important;font-size:9pt!important;}
   #cover-tab .rev-table .approved-row{background:#f0fff4!important;}
   #cover-tab .rev-table .approved-badge{background:#27ae60!important;color:#fff!important;padding:1px 6px!important;border-radius:4px!important;font-size:8pt!important;}
-  #cover-tab .cover-title{
-    font-size:36pt!important;
-    font-weight:900!important;
-    letter-spacing:1px!important;
-    margin-bottom:8mm!important;
-  }
-  #cover-tab .cover-line{margin:4mm 0 8mm!important;}
-  #cover-tab .cover-grid{
-    font-size:13pt!important;
-    gap:6px 16px!important;
-    margin-bottom:10mm!important;
-  }
-  #cover-tab .cover-grid input{
-    font-size:13pt!important;
-    border:1px solid #999!important;
-    padding:4px 8px!important;
-  }
-  #cover-tab .cover-grid label{font-size:11pt!important;}
-  #cover-tab .rev-table{font-size:10pt!important;width:100%!important;}
-  #cover-tab .rev-table th{
-    background:#1e3a5f!important;color:#fff!important;
-    padding:5px 8px!important;font-size:10pt!important;
-  }
-  #cover-tab .rev-table td{padding:4px 8px!important;border:1px solid #ccc!important;}
   #cover-tab .project-type-btn,.no-print{display:none!important;}
 
   /* ══════════════════════════════════════════
@@ -1640,6 +1625,10 @@ body::after{
         <input type="checkbox" id="optTab_nav-net-tab" checked onchange="toggleOptTab('nav-net-tab',this)" style="width:auto;accent-color:var(--primary);cursor:pointer;">
         <span>🔌 Net List</span>
       </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:12px;">
+        <input type="checkbox" id="optTab_nav-templates-btn" checked onchange="toggleOptTab('nav-templates-btn',this)" style="width:auto;accent-color:var(--accent);">
+        <span>📚 Templates</span>
+      </label>
       <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:12px;border:1px solid #edf0f7;user-select:none;">
         <input type="checkbox" id="optTab_nav-cable-tab" checked onchange="toggleOptTab('nav-cable-tab',this)" style="width:auto;accent-color:var(--primary);cursor:pointer;">
         <span>🔧 Cable Schedule</span>
@@ -2372,16 +2361,28 @@ function addWiringRow(data,suppressDirty){
     if(i===11){attachDD(inp,'term',tr);inp.addEventListener('input',()=>{clearRowHighlights();schedLookup(tr);schedValidation();});inp.addEventListener('change',()=>{rowLookup(tr);checkRowAWG(tr);checkRowOD(tr);schedValidation();});}
     if(i===6){attachDD(inp,'wire',tr);inp.addEventListener('input',()=>{clearRowHighlights();schedLookup(tr);schedValidation();});inp.addEventListener('change',()=>{rowLookup(tr);checkRowAWG(tr);checkRowOD(tr);schedValidation();});}
     if(i===2||i===13){inp.addEventListener('change',e=>{refreshConnGroups();checkNewConn(e.target.value.trim());});inp.addEventListener('input',refreshConnGroups);}
+    inp.addEventListener('focus',()=>{ if(!_undoPendingSnap) _undoPendingSnap=_wiringSnapshot(); });
     inp.addEventListener('input',()=>{if(!suppressDirty)markDirty();schedValidation();});
+    inp.addEventListener('change',()=>{
+      if(_undoPendingSnap){
+        if(!_undoLock){
+          _undoStack.push(_undoPendingSnap);
+          if(_undoStack.length>UNDO_MAX) _undoStack.shift();
+          _redoStack.length=0;
+          _undoUpdateBtns();
+        }
+        _undoPendingSnap=null;
+      }
+    });
     inp.addEventListener('keydown',wiringKeyNav);
     td.appendChild(inp);
   }
   // cDel already created above
   const btn=document.createElement('button');btn.className='btn-delete';btn.style.margin='0';btn.textContent='🗑';btn.onclick=()=>deleteWiringRow(tr);cDel.appendChild(btn);
-  tbody.appendChild(tr);if(data)rowLookup(tr,true);syncMirrorWidthAll();
+  tbody.appendChild(tr);if(data)rowLookup(tr,true);syncMirrorWidthAll();schedValidation();
   tr.addEventListener('contextmenu',e=>{e.preventDefault();wiringRowMenu(tr,e);});
 }
-function deleteWiringRow(tr){if(!confirm('Delete row?'))return;tr.remove(); refreshConnGroups();markDirty();updateRowCount();}
+function deleteWiringRow(tr){if(!confirm('Delete row?'))return;tr.remove(); refreshConnGroups();markDirty();updateRowCount();schedValidation();}
 function clearAllRows(){if(!confirm('Delete ALL wiring rows?'))return;document.getElementById('wiringBody').innerHTML='';markDirty();updateRowCount();}
 let _lt=null;
 let _vt=null; // validation timer
@@ -2652,7 +2653,36 @@ function runValidation(){
     [r.cmp1,r.cmp2].forEach(cp=>{if(!cp)return;(cmpPins[cp]=cmpPins[cp]||[]).push(r.wireNo);});
   });
   Object.entries(cmpPins).forEach(([cp,wires])=>{
-    if(wires.length>1)rows.forEach(r=>{if(r.cmp1===cp||r.cmp2===cp){issues.push({type:'wrn',wireNo:r.wireNo,msg:`CMP:PIN "${cp}" on ${wires.length} wires — possible short`});if(!r.tr.classList.contains('row-error'))r.tr.classList.add('row-warn');}});
+    if(wires.length<=1) return;
+    rows.forEach((r,rIdx)=>{
+      [['cmp1','pin1type'],['cmp2','pin2type']].forEach(([cmpField,pinField])=>{
+        if(r[cmpField]!==cp) return;
+        // Skip the short-circuit warning if this row is a legitimate ^ pairing:
+        // its own pin field is '^' AND the row directly above has a terminal
+        // configured with a twinType (same/range) in DB TERM.
+        const myPin=(r[pinField]||'').trim();
+        let isValidTwinPair=false;
+        if(myPin==='^'){
+          const above=rows[rIdx-1];
+          const aboveTerm=above?(above[pinField]||'').trim():'';
+          if(aboveTerm&&aboveTerm!=='^'){
+            const tDB=dbTerm.find(t=>t.type&&(t.type===aboveTerm||aboveTerm.includes(t.type)));
+            if(tDB&&(tDB.twinType==='same'||tDB.twinType==='range')) isValidTwinPair=true;
+          }
+        } else {
+          // This row IS the parent (^ points to it) — also valid if next row uses it via ^
+          const below=rows[rIdx+1];
+          const belowPin=below?(below[pinField]||'').trim():'';
+          if(belowPin==='^'){
+            const tDB=dbTerm.find(t=>t.type&&(t.type===myPin||myPin.includes(t.type)));
+            if(tDB&&(tDB.twinType==='same'||tDB.twinType==='range')) isValidTwinPair=true;
+          }
+        }
+        if(isValidTwinPair) return; // legitimate twin wire — not a short
+        issues.push({type:'wrn',wireNo:r.wireNo,msg:`CMP:PIN "${cp}" on ${wires.length} wires — possible short`});
+        if(!r.tr.classList.contains('row-error')) r.tr.classList.add('row-warn');
+      });
+    });
   });
   /* ── Twin / Double terminal check ── */
   checkTwinTerminals(rows).forEach(iss=>issues.push(iss));
@@ -5330,12 +5360,13 @@ function loadTemplate(idx){
    UNDO / REDO ENGINE (from ICT3)
    ════════════════════════════════════════════════════════════ */
 const _undoStack=[], _redoStack=[];
+let _undoPendingSnap=null;
 const UNDO_MAX=50;
 let _undoLock=false;
 
 function _wiringSnapshot(){
   return [...document.querySelectorAll('#wiringBody tr')].map(tr=>({
-    wn:tr.cells[1]?.textContent?.trim()||'',
+    wn:tr.cells[1]?.querySelector('input')?.value?.trim()||tr.cells[1]?.textContent?.trim()||'',
     cols:Array.from({length:15},(_,i)=>tr.cells[i+2]?.querySelector('input')?.value||''),
   }));
 }
@@ -5427,7 +5458,7 @@ function wiringRowMenuAction(action){
     const nt=_makeBlankWiringTr();
     tr.querySelectorAll('input').forEach((inp,i)=>{const ni=nt.querySelectorAll('input')[i];if(ni)ni.value=inp.value;});
     tr.parentNode.insertBefore(nt,tr.nextSibling);
-  } else if(action==='delete'){tr.remove();} refreshConnGroups(); updateRowCount(); markDirty(); updateTopbar();
+  } else if(action==='delete'){tr.remove();} refreshConnGroups(); updateRowCount(); markDirty(); updateTopbar(); schedValidation();
 }
 
 
@@ -6920,7 +6951,8 @@ const OPT_TABS_DEFAULT={
   'nav-net-tab':false,'nav-cable-tab':false,'nav-conn-tab':false,
   'nav-connload-tab':false,'nav-cont-tab':false,'nav-face-tab':false,
   'nav-splice-tab':false,'nav-harness-tab':false,'nav-xref-tab':false,
-  'nav-changelog-tab':false,'nav-diff-tab':false,'nav-detail-tab':false
+  'nav-changelog-tab':false,'nav-diff-tab':false,'nav-detail-tab':false,
+  'nav-templates-btn':false
 };
 
 function loadOptTabs(){
@@ -7058,6 +7090,7 @@ function clearSelectedCells(){
   });
   _selCells.clear();
   markDirty();
+  schedValidation(); // explicit call — not solely reliant on dispatched input events
 }
 
 // Column header click → select entire column
@@ -7897,26 +7930,38 @@ function getTermRange(termType){
 function checkTwinWires(rows){
   const issues=[];
 
+  // ── Section 3: ^ requires strict direct adjacency (sort/delete safe) ──
+  // The row above (idx-1) MUST contain the real terminal. If anything else
+  // is found there (blank, different terminal, or another ^), this is
+  // flagged as a broken link rather than silently guessing the parent.
   rows.forEach((r,idx)=>{
     if(idx===0) return;
 
-    // Check PIN1 side
     ['pin1type','pin2type'].forEach(pinField=>{
-      if((r[pinField]||'').trim()!=='^') return;
+      const myVal=(r[pinField]||'').trim();
+      if(myVal!=='^') return;
 
-      // Find nearest parent row with real terminal on same side
-      let parentRow=null, parentTerm='';
-      for(let k=idx-1;k>=0;k--){
-        const t=(rows[k][pinField]||'').trim();
-        if(t&&t!=='^'){parentRow=rows[k];parentTerm=t;break;}
+      // ── Section 3: ^ MUST refer to the row DIRECTLY above (idx-1) ──
+      // This is strict by design: if any other row (even with a different real
+      // terminal) sits between the intended parent and this ^, the link is
+      // ambiguous and must be flagged — silently picking the "nearest" parent
+      // would mask sorting/insertion mistakes.
+      const directAbove=rows[idx-1];
+      const directVal=directAbove?(directAbove[pinField]||'').trim():'';
+
+      if(!directAbove||!directVal||directVal==='^'){
+        // Row directly above has no real terminal on this side at all
+        issues.push({type:'err', wireNo:r.wireNo,
+          msg:`${pinField==='pin1type'?'PIN1':'PIN2'}: "^" on row ${r.wireNo} has no terminal directly above it — link is broken (row deleted, sorted, or moved?)`});
+        return;
       }
-      if(!parentRow||!parentTerm) return;
 
-      // Get terminal from DB
+      const parentRow=directAbove, parentTerm=directVal;
+      const side=pinField==='pin1type'?'PIN1':'PIN2';
+      const wires=`${parentRow.wireNo}+${r.wireNo}`;
+
       const tDB=dbTerm.find(t=>t.type&&(t.type===parentTerm||parentTerm.includes(t.type)));
       if(!tDB) return;
-
-      // Skip if twinType not defined
       const twinType=(tDB.twinType||'').trim();
       if(!twinType||twinType==='none') return;
 
@@ -7926,46 +7971,91 @@ function checkTwinWires(rows){
 
       const awg1=getWireAWGnum(ws1);
       const awg2=getWireAWGnum(ws2);
-      const wires=`${parentRow.wireNo}+${r.wireNo}`;
-      const side=pinField==='pin1type'?'PIN1':'PIN2';
+      const od1=getWireOD(ws1);
+      const od2=getWireOD(ws2);
 
-      // ── same: twin ferrule — both wires must have identical AWG ──
-      // No cross-section check: the ferrule is DESIGNED for two identical wires
+      // ── same: twin ferrule — requires identical AWG, no cross-section check ──
       if(twinType==='same'){
         if(awg1>0&&awg2>0&&awg1!==awg2){
-          const msg=`${side} "${parentTerm}" (twin ferrule): requires identical AWG — got AWG${awg1}+AWG${awg2}`;
-          issues.push({type:'err',wireNo:wires,msg});
+          issues.push({type:'err', wireNo:wires,
+            msg:`${side} "${parentTerm}" (twin ferrule): requires identical AWG — got AWG${awg1}+AWG${awg2}`});
           if(parentRow.tr) parentRow.tr.classList.add('row-error');
           if(r.tr) r.tr.classList.add('row-error');
         }
-        // AWG matches or not defined → OK, twin ferrule accepts this
+        // ── Section 5: OD check even for identical-AWG ferrules ──
+        // (insulation thickness can differ even at same AWG — e.g. PTFE vs PVC)
+        if(od1>0&&od2>0&&tDB.odMax>0){
+          const combinedOD=od1+od2; // side-by-side in a twin ferrule barrel
+          if(combinedOD>tDB.odMax){
+            issues.push({type:'err', wireNo:wires,
+              msg:`${side} "${parentTerm}" (twin ferrule): combined insulation OD ${combinedOD.toFixed(2)}mm exceeds barrel window ${tDB.odMax}mm — wires physically won't fit`});
+            if(parentRow.tr) parentRow.tr.classList.add('row-error');
+            if(r.tr) r.tr.classList.add('row-error');
+          }
+        }
         return;
       }
 
-      // ── range: ring/fork — check combined cross-section ──
+      // ── range: ring/fork terminal — combined cross-section + OD check ──
       if(twinType==='range'){
+        // Section 2: mixed AWG supported — awg1 and awg2 can differ
         if(awg1>0&&awg2>0){
           const mm2_1=awgToMM2(awg1);
           const mm2_2=awgToMM2(awg2);
           const mm2_total=mm2_1+mm2_2;
-          // Terminal capacity = mm² of its thickest allowed wire (awgMin = smallest AWG number)
-          const awgMinT=parseInt(tDB.awgMin)||0;
+          const awgMinT=parseInt(tDB.awgMin)||0; // smallest AWG number = thickest single wire allowed
           if(awgMinT>0){
             const termCapMM2=awgToMM2(awgMinT);
             if(mm2_total>termCapMM2*1.05){
-              const msg=`${side} "${parentTerm}": combined ${mm2_total.toFixed(2)}mm² (AWG${awg1}+AWG${awg2}) exceeds capacity ${termCapMM2.toFixed(2)}mm² (AWG${awgMinT})`;
-              issues.push({type:'err',wireNo:wires,msg});
+              issues.push({type:'err', wireNo:wires,
+                msg:`${side} "${parentTerm}": combined ${mm2_total.toFixed(2)}mm² (AWG${awg1}+AWG${awg2}) exceeds capacity ${termCapMM2.toFixed(2)}mm² (rated AWG${awgMinT})`});
               if(parentRow.tr) parentRow.tr.classList.add('row-error');
               if(r.tr) r.tr.classList.add('row-error');
             }
+          }
+        }
+        // ── Section 5: combined insulation OD vs terminal window ──
+        if(od1>0&&od2>0&&tDB.odMax>0){
+          const combinedOD=od1+od2;
+          if(combinedOD>tDB.odMax){
+            issues.push({type:'err', wireNo:wires,
+              msg:`${side} "${parentTerm}": combined insulation OD ${combinedOD.toFixed(2)}mm exceeds terminal window ${tDB.odMax}mm — wires physically won't fit`});
+            if(parentRow.tr) parentRow.tr.classList.add('row-error');
+            if(r.tr) r.tr.classList.add('row-error');
           }
         }
       }
     });
   });
 
+  // ── Section 4: strict requirement — twinType='same' MUST have a ^ row below ──
+  // If a terminal is configured as twin-ferrule (same) but no ^ row follows it,
+  // that's a missing-second-wire error (ferrule barrel left half-empty).
+  rows.forEach((r,idx)=>{
+    ['pin1type','pin2type'].forEach(pinField=>{
+      const myVal=(r[pinField]||'').trim();
+      if(!myVal||myVal==='^') return; // only check rows with a REAL terminal
+
+      const tDB=dbTerm.find(t=>t.type&&(t.type===myVal||myVal.includes(t.type)));
+      if(!tDB) return;
+      const twinType=(tDB.twinType||'').trim();
+      if(twinType!=='same') return; // only strict for twin-ferrule type
+
+      // Check if the immediately following row (same side) has ^
+      const nextRow=rows[idx+1];
+      const nextVal=nextRow ? (nextRow[pinField]||'').trim() : '';
+      if(nextVal!=='^'){
+        const side=pinField==='pin1type'?'PIN1':'PIN2';
+        issues.push({type:'err', wireNo:r.wireNo,
+          msg:`${side} "${myVal}" (twin ferrule): requires a second wire — add "^" in the row below, or this terminal will have an empty barrel half`});
+        if(r.tr) r.tr.classList.add('row-error');
+      }
+    });
+  });
+
   return issues;
 }
+
 
 
 </script>
