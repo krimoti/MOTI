@@ -1234,20 +1234,20 @@ body::after{
       <thead id="wiringHead"><tr>
         <th style="width:40px;position:sticky;left:0;z-index:5;background:#c0392b;color:#fff;" class="no-print">DEL</th>
         <th data-col="rn" style="width:3.41%;background:#2d4050;color:#e8f0fb;">WIRE NO</th>
-        <th data-col="1" oncontextmenu="colHeaderMenu(1,event)" title="Right-click to clear column"  style="width:2.93%;">EXP A<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
+        <th data-col="1" oncontextmenu="colHeaderMenu(1,event)" title="Right-click to clear column — this is an auto-filled field, values will be empty until re-calculated"  style="width:2.93%;">EXP A<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
         <th data-col="2" oncontextmenu="colHeaderMenu(2,event)" title="Right-click to clear column"  style="width:7.8%;">CONNECTOR #1</th>
-        <th data-col="3" oncontextmenu="colHeaderMenu(3,event)" title="Right-click to clear column"  style="width:6.1%;">PIN 1 P/N<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
+        <th data-col="3" oncontextmenu="colHeaderMenu(3,event)" title="Right-click to clear column — this is an auto-filled field, values will be empty until re-calculated"  style="width:6.1%;">PIN 1 P/N<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
         <th data-col="4" oncontextmenu="colHeaderMenu(4,event)" title="Right-click to clear column"  style="width:10.49%;">PIN 1 TYPE</th>
         <th data-col="5" oncontextmenu="colHeaderMenu(5,event)" title="Right-click to clear column"  style="width:6.1%;">CMP:PIN1</th>
         <th data-col="6" oncontextmenu="colHeaderMenu(6,event)" title="Right-click to clear column"  style="width:8.54%;">WIRE SIZE</th>
-        <th data-col="7" oncontextmenu="colHeaderMenu(7,event)" title="Right-click to clear column"  style="width:7.8%;">WIRE P/N<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
+        <th data-col="7" oncontextmenu="colHeaderMenu(7,event)" title="Right-click to clear column — this is an auto-filled field, values will be empty until re-calculated"  style="width:7.8%;">WIRE P/N<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
         <th data-col="8" oncontextmenu="colHeaderMenu(8,event)" title="Right-click to clear column"  style="width:3.41%;">LENGTH</th>
         <th data-col="9" oncontextmenu="colHeaderMenu(9,event)" title="Right-click to clear column"  style="width:3.9%;">ROUTING</th>
         <th data-col="10" oncontextmenu="colHeaderMenu(10,event)" title="Right-click to clear column" style="width:6.1%;">CMP:PIN2</th>
         <th data-col="11" oncontextmenu="colHeaderMenu(11,event)" title="Right-click to clear column" style="width:10.49%;">PIN 2 TYPE</th>
-        <th data-col="12" oncontextmenu="colHeaderMenu(12,event)" title="Right-click to clear column" style="width:6.59%;">PIN 2 P/N<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
+        <th data-col="12" oncontextmenu="colHeaderMenu(12,event)" title="Right-click to clear column — this is an auto-filled field, values will be empty until re-calculated" style="width:6.59%;">PIN 2 P/N<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
         <th data-col="13" oncontextmenu="colHeaderMenu(13,event)" title="Right-click to clear column" style="width:7.8%;">CONNECTOR #2</th>
-        <th data-col="14" oncontextmenu="colHeaderMenu(14,event)" title="Right-click to clear column" style="width:2.93%;">EXP B<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
+        <th data-col="14" oncontextmenu="colHeaderMenu(14,event)" title="Right-click to clear column — this is an auto-filled field, values will be empty until re-calculated" style="width:2.93%;">EXP B<br><small style="opacity:.7;font-weight:400;">(auto)</small></th>
         <th data-col="15" oncontextmenu="colHeaderMenu(15,event)" title="Right-click to clear column" style="width:5.61%;">NOTES</th>
 
       </tr></thead>
@@ -1542,7 +1542,7 @@ body::after{
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
   <div class="sys-section">
     <h3>🔩 DB TERM</h3>
-    <table class="db-table"><thead><tr><th>TYPE</th><th>PIN P/N</th><th style="width:52px" title="Wire exposure mm">Exposure</th><th style="width:58px" title="Min insulation OD (mm)">O.D min</th><th style="width:58px" title="Max insulation OD (mm)">O.D max</th><th style="width:48px" title="Min AWG accepted">AWG↓</th><th style="width:48px" title="Max AWG accepted">AWG↑</th><th style="width:80px" title="Twin wire support: none=single wire only, same=twin ferrule (identical AWG), range=ring/fork terminal (combined cross-section check)">Twin</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbTermBody"></tbody></table>
+    <table class="db-table"><thead><tr><th>TYPE</th><th>PIN P/N</th><th style="width:52px" title="Wire exposure mm">Exposure</th><th style="width:58px" title="Min insulation OD (mm)">O.D min</th><th style="width:58px" title="Max insulation OD (mm)">O.D max</th><th style="width:48px" title="Min cross-section = thinnest wire allowed (e.g. 22AWG — larger AWG number)">AWG MIN</th><th style="width:48px" title="Max cross-section = thickest wire allowed (e.g. 18AWG — smaller AWG number)">AWG MAX</th><th style="width:80px" title="Twin wire support: none=single wire only (^ blocked), same=twin ferrule — requires identical AWG + checks combined insulation OD vs barrel, range=ring/fork terminal — checks combined cross-section + combined insulation OD vs window">Twin</th><th style="width:44px" class="no-print">Del</th></tr></thead><tbody id="dbTermBody"></tbody></table>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
       <button class="btn btn-sm btn-green" onclick="addDBTermRow()">＋ Add</button>
       <label class="btn btn-sm btn-blue" style="cursor:pointer;">📥 CSV<input type="file" hidden onchange="importDBCSV(this,'term')"></label>
@@ -2256,20 +2256,20 @@ function handleLogo(input){const r=new FileReader();r.onload=e=>{document.getEle
     const ni=(field,max,step,title)=>
       `<input type="number" min="0" max="${max}" step="${step}"
         value="${r[field]||''}" placeholder="—"
-        oninput="dbTerm[${i}].${field}=parseFloat(this.value)||0;markDirty()"
+        oninput="dbTerm[${i}].${field}=parseFloat(this.value)||0;markDirty();schedValidation()"
         title="${title}"
         style="width:100%;padding:3px;border:1px solid #c8d4e0;border-radius:6px;font-size:12px;text-align:center;">`;
     const tv=r.twinType||'none';
     tr.innerHTML=`
-      <td><input value="${escH(r.type)}" oninput="dbTerm[${i}].type=this.value;refreshDBLists();markDirty()"></td>
+      <td><input value="${escH(r.type)}" oninput="dbTerm[${i}].type=this.value;refreshDBLists();updateWiringLookups();markDirty();schedValidation()"></td>
       <td><input value="${escH(r.pn||'')}" oninput="dbTerm[${i}].pn=this.value;markDirty()"></td>
       <td>${ni('exp',30,0.1,'Wire exposure mm')}</td>
       <td>${ni('odMin',20,0.1,'Min insulation OD (mm)')}</td>
       <td>${ni('odMax',20,0.1,'Max insulation OD (mm)')}</td>
-      <td>${ni('awgMin',40,1,'Min AWG (thickest)')}</td>
-      <td>${ni('awgMax',40,1,'Max AWG (thinnest)')}</td>
-      <td><select onchange="dbTerm[${i}].twinType=this.value;markDirty()"
-        title="none=single wire only | same=twin ferrule (identical AWG) | range=ring/fork (combined cross-section)"
+      <td>${ni('awgMin',40,1,'MAX cross-section — thickest wire allowed (smaller AWG number, e.g. 18)')}</td>
+      <td>${ni('awgMax',40,1,'MIN cross-section — thinnest wire allowed (larger AWG number, e.g. 22)')}</td>
+      <td><select onchange="dbTerm[${i}].twinType=this.value;markDirty();schedValidation()"
+        title="none=single wire only (^ blocked) | same=twin ferrule: identical AWG + combined OD check | range=ring/fork: combined cross-section + combined OD check"
         style="padding:3px 4px;border:1px solid #c8d4e0;border-radius:6px;font-size:11px;width:100%;">
         <option value="none" ${tv==='none'?'selected':''}>— none</option>
         <option value="same" ${tv==='same'?'selected':''}>✦ same AWG</option>
@@ -2281,8 +2281,8 @@ function handleLogo(input){const r=new FileReader();r.onload=e=>{document.getEle
     b.appendChild(tr);
   });
 }
-function addDBTermRow(){dbTerm.push({type:'',pn:'',exp:0,odMin:0,odMax:0,awgMin:0,awgMax:0,twinType:'none'});renderDBTerm();markDirty();}
-function delDBTermRow(i){dbTerm.splice(i,1);renderDBTerm();updateWiringLookups();markDirty();}
+function addDBTermRow(){dbTerm.push({type:'',pn:'',exp:0,odMin:0,odMax:0,awgMin:0,awgMax:0,twinType:'none'});renderDBTerm();markDirty();schedValidation();}
+function delDBTermRow(i){dbTerm.splice(i,1);renderDBTerm();updateWiringLookups();markDirty();schedValidation();}
 function renderDBWire(){
   const b=document.getElementById('dbWireBody');
   b.innerHTML='';
@@ -2290,26 +2290,26 @@ function renderDBWire(){
     if(!r.unit) r.unit='awg';
     const tr=document.createElement('tr');
     tr.innerHTML=`
-      <td><input value="${escH(r.size)}" oninput="dbWire[${i}].size=this.value;refreshDBLists();updateWiringLookups();markDirty()"></td>
+      <td><input value="${escH(r.size)}" oninput="dbWire[${i}].size=this.value;refreshDBLists();updateWiringLookups();markDirty();schedValidation()"></td>
       <td><input value="${escH(r.pn||'')}" oninput="dbWire[${i}].pn=this.value;markDirty()"></td>
-      <td><select onchange="dbWire[${i}].unit=this.value;markDirty()"
+      <td><select onchange="dbWire[${i}].unit=this.value;markDirty();schedValidation()"
         style="padding:3px 4px;border:1px solid #c8d4e0;border-radius:6px;font-size:11px;width:100%;">
         <option value="awg" ${(r.unit||'awg')==='awg'?'selected':''}>AWG</option>
         <option value="mm2" ${r.unit==='mm2'?'selected':''}>mm²</option>
       </select></td>
       <td><input type="number" min="0" max="20" step="0.1"
         value="${r.od||''}" placeholder="—"
-        oninput="dbWire[${i}].od=parseFloat(this.value)||0;markDirty()"
+        oninput="dbWire[${i}].od=parseFloat(this.value)||0;markDirty();schedValidation()"
         title="Outer diameter incl. insulation (mm)"
         style="width:48px;padding:3px;border:1px solid #c8d4e0;border-radius:6px;font-size:11px;text-align:center;"></td>
       <td><input type="number" min="0" max="5000" step="50"
         value="${r.voltage||''}" placeholder="—"
-        oninput="dbWire[${i}].voltage=parseInt(this.value)||0;markDirty()"
+        oninput="dbWire[${i}].voltage=parseInt(this.value)||0;markDirty();schedValidation()"
         title="Voltage rating (V)"
         style="width:48px;padding:3px;border:1px solid #c8d4e0;border-radius:6px;font-size:11px;text-align:center;"></td>
       <td><input type="number" min="0" max="40" step="1"
         value="${r.awgNum||''}" placeholder="—"
-        oninput="dbWire[${i}].awgNum=parseInt(this.value)||0;markDirty()"
+        oninput="dbWire[${i}].awgNum=parseInt(this.value)||0;markDirty();schedValidation()"
         title="AWG number (e.g. 22)"
         style="width:40px;padding:3px;border:1px solid #c8d4e0;border-radius:6px;font-size:11px;text-align:center;"></td>
       <td class="no-print" style="text-align:center;">
@@ -2318,8 +2318,8 @@ function renderDBWire(){
     b.appendChild(tr);
   });
 }
-function addDBWireRow(){dbWire.push({size:'',pn:'',unit:'awg',od:0,voltage:0,awgNum:0});renderDBWire();markDirty();}
-function delDBWireRow(i){dbWire.splice(i,1);renderDBWire();updateWiringLookups();markDirty();}
+function addDBWireRow(){dbWire.push({size:'',pn:'',unit:'awg',od:0,voltage:0,awgNum:0});renderDBWire();markDirty();schedValidation();}
+function delDBWireRow(i){dbWire.splice(i,1);renderDBWire();updateWiringLookups();markDirty();schedValidation();}
 
 function renderDBMarker(){const b=document.getElementById('dbMarkerBody');b.innerHTML='';dbMarker.forEach((r,i)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><input value="${escH(r.size)}" oninput="dbMarker[${i}].size=this.value;markDirty()"></td><td><input value="${escH(r.pn)}" oninput="dbMarker[${i}].pn=this.value;markDirty()"></td><td class="no-print" style="text-align:center;"><button class="btn-delete" style="margin:0" onclick="delDBMarkerRow(${i})">🗑</button></td>`;b.appendChild(tr);});}
 function addDBMarkerRow(){dbMarker.push({size:'',pn:''});renderDBMarker();markDirty();}
@@ -6284,7 +6284,7 @@ const KMS_HELP = {
       title: 'Database',
       sections: [
         { head: 'Purpose', body: 'The Database stores your component library. When you select a terminal type or wire size in the Wiring List, the tool auto-fills the P/N and exposure values from here.' },
-        { head: 'DB TERM', body: 'Terminal/pin types. Each row defines one terminal type and its acceptance range for crimping validation.\n\nColumns:\n• TYPE — exact name you type in PIN TYPE column of Wiring List\n• PIN P/N — manufacturer part number (auto-filled)\n• Exp. — wire exposure / strip length (mm)\n• OD↓ / OD↑ — min/max insulation outer diameter (mm). Wire OD must fall within this range. Leave 0 to skip.\n• AWG↓ / AWG↑ — AWG range accepted. AWG↓=thickest (e.g. 20), AWG↑=thinnest (e.g. 26). Leave 0 to skip.\n• Volt↑ — maximum voltage rating (V). Wire voltage must not exceed this. Leave 0 to skip.\n\nExample: TYPE=M22520/2 socket 22D, OD↓=1.2, OD↑=1.8, AWG↓=22, AWG↑=26, Volt↑=600' },
+        { head: 'DB TERM', body: 'Terminal/pin types. Each row defines one terminal type and its acceptance range for crimping validation.\n\nColumns:\n• TYPE — exact name you type in PIN TYPE column of Wiring List\n• PIN P/N — manufacturer part number (auto-filled)\n• Exp. — wire exposure / strip length (mm)\n• OD↓ / OD↑ — min/max insulation outer diameter (mm). Wire OD must fall within this range. Leave 0 to skip.\n• AWG MIN / AWG MAX — cross-section range accepted. AWG MIN = thinnest wire (larger AWG number, e.g. 26), AWG MAX = thickest wire (smaller AWG number, e.g. 20). Leave 0 to skip.\n• Volt↑ — maximum voltage rating (V). Wire voltage must not exceed this. Leave 0 to skip.\n\nExample: TYPE=M22520/2 socket 22D, OD↓=1.2, OD↑=1.8, AWG MIN=26, AWG MAX=22, Volt↑=600' },
         { head: 'DB WIRE', body: 'Wire types. Each row defines one wire and its electrical/physical properties for crimping validation.\n\nColumns:\n• SIZE — exact name you type in WIRE SIZE column of Wiring List\n• Wire P/N — manufacturer part number (auto-filled)\n• Unit — AWG or mm² (affects AWG compatibility calculation)\n• OD (mm) — total outer diameter including insulation. Used to verify crimp compatibility.\n• Volt (V) — insulation voltage rating (e.g. 300, 600, 1000)\n• AWG — explicit AWG number (overrides parsing from name)\n\nValidation rule: if wire OD > terminal OD↑ → error (too thick). If wire OD < terminal OD↓ → warning (may slip). Same logic for AWG and Voltage.\n\nLeave any field at 0 = skip that check.\n\nExample: SIZE=RED_22AWG_600V, OD=2.0, Volt=600, AWG=22' },
         { head: 'DB Connectors', body: 'Connector library. Columns: Name (connector ID), P/N, Pins (total pin count), Rows, Cols, Shape.\n• Rows/Cols: define the pin grid layout for Connector Face View\n• Shape: Grid (rectangular), Circular (round connectors like MIL-38999), D-Sub\n• Leave Rows/Cols at 0 for automatic layout' },
         { head: 'Import/Export', body: 'Export your DB to CSV for backup or sharing. Import CSV files to load a component library. Format: TYPE,PIN_PN,EXPOSURE for terminals; SIZE,WIRE_PN for wires.' },
@@ -6294,7 +6294,7 @@ const KMS_HELP = {
       title: 'מסד נתונים',
       sections: [
         { head: 'מטרה', body: 'ה-Database שומר את ספריית הרכיבים שלך. כשבוחרים סוג נעל או גודל חוט ברשימת החיווט, הכלי ממלא אוטומטית את מספר החלק וחשיפת החוט מכאן.' },
-        { head: 'DB TERM', body: 'סוגי נעליים/פינים. כל שורה מגדירה נעל אחת וטווח קבלה שלה לולידציית לחיצה.\n\nעמודות:\n• TYPE — שם מדויק שמקלידים בעמודת PIN TYPE ברשימת החיווט\n• PIN P/N — מספר חלק (ממולא אוטומטית)\n• Exp. — אורך חשיפת חוט / פיסול (מ"מ)\n• OD↓ / OD↑ — קוטר בידוד מינימלי/מקסימלי (מ"מ). ה-OD של החוט חייב להיות בטווח זה. השאר 0 לדילוג.\n• AWG↓ / AWG↑ — טווח AWG מקובל. AWG↓=עבה ביותר (למשל 20), AWG↑=דק ביותר (למשל 26). השאר 0 לדילוג.\n• Volt↑ — מתח מקסימלי (V). מתח החוט לא יעלה על ערך זה. השאר 0 לדילוג.\n\nדוגמה: TYPE=M22520/2 socket 22D, OD↓=1.2, OD↑=1.8, AWG↓=22, AWG↑=26, Volt↑=600' },
+        { head: 'DB TERM', body: 'סוגי נעליים/פינים. כל שורה מגדירה נעל אחת וטווח קבלה שלה לולידציית לחיצה.\n\nעמודות:\n• TYPE — שם מדויק שמקלידים בעמודת PIN TYPE ברשימת החיווט\n• PIN P/N — מספר חלק (ממולא אוטומטית)\n• Exp. — אורך חשיפת חוט / פיסול (מ"מ)\n• OD↓ / OD↑ — קוטר בידוד מינימלי/מקסימלי (מ"מ). ה-OD של החוט חייב להיות בטווח זה. השאר 0 לדילוג.\n• AWG MIN / AWG MAX — טווח חתך מקובל. AWG MIN = חוט דק ביותר (מספר AWG גבוה, למשל 26), AWG MAX = חוט עבה ביותר (מספר AWG נמוך, למשל 20). השאר 0 לדילוג.\n• Volt↑ — מתח מקסימלי (V). מתח החוט לא יעלה על ערך זה. השאר 0 לדילוג.\n\nדוגמה: TYPE=M22520/2 socket 22D, OD↓=1.2, OD↑=1.8, AWG MIN=26, AWG MAX=22, Volt↑=600' },
         { head: 'DB WIRE', body: 'סוגי חוטים. כל שורה מגדירה חוט ומאפייניו הפיזיקליים/חשמליים לולידציית לחיצה.\n\nעמודות:\n• SIZE — שם מדויק שמקלידים בעמודת WIRE SIZE ברשימת החיווט\n• Wire P/N — מספר חלק (ממולא אוטומטית)\n• Unit — AWG או mm² (משפיע על חישוב התאמת AWG)\n• OD (מ"מ) — קוטר חיצוני כולל בידוד. משמש לאימות התאמת לחיצה.\n• Volt (V) — דירוג מתח הבידוד (למשל 300, 600, 1000)\n• AWG — מספר AWG מפורש (דורס ניתוח מהשם)\n\nכלל ולידציה: אם OD חוט > OD↑ נעל → שגיאה (עבה מדי). אם OD חוט < OD↓ → אזהרה (עלול להחליק). אותו היגיון ל-AWG ו-Voltage.\n\nהשאר שדה ב-0 = דילוג על בדיקה זו.\n\nדוגמה: SIZE=RED_22AWG_600V, OD=2.0, Volt=600, AWG=22' },
         { head: 'DB Connectors', body: 'ספריית קונקטורים. עמודות: שם (מזהה קונקטור), P/N, פינים (סה"כ פינים), שורות, עמודות, צורה.\n• שורות/עמודות: מגדירים את פריסת רשת הפינים לתצוגת פני הקונקטור\n• צורה: Grid (מלבני), Circular (קונקטורים עגולים כמו MIL-38999), D-Sub\n• השאר שורות/עמודות על 0 ל-layout אוטומטי' },
         { head: 'ייבוא/ייצוא', body: 'ייצא את ה-DB ל-CSV לגיבוי או שיתוף. ייבא קבצי CSV לטעינת ספריית רכיבים. פורמט: TYPE,PIN_PN,EXPOSURE לנעליים; SIZE,WIRE_PN לחוטים.' },
