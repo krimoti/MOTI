@@ -508,9 +508,252 @@ body{
   font-weight:600;cursor:pointer;color:var(--gray-700);font-size:0.95rem;
 }
 
+/* ---- TOGGLE SWITCH ---- */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.toggle-row-text{flex:1;}
+.toggle-row-title{font-weight:700;font-size:0.92rem;color:var(--gray-800);}
+.toggle-row-sub{font-size:0.78rem;color:var(--gray-600);margin-top:3px;line-height:1.4;}
+.switch{
+  position:relative;width:50px;height:28px;border-radius:20px;
+  background:var(--gray-200);border:none;cursor:pointer;flex:0 0 auto;
+  transition:background 0.25s;padding:0;
+}
+.switch.on{background:linear-gradient(135deg,#667eea,#764ba2);}
+.switch-knob{
+  position:absolute;top:3px;right:3px;
+  width:22px;height:22px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);
+  transition:transform 0.25s;
+}
+.switch.on .switch-knob{transform:translateX(-22px);}
+
+/* ============================================================
+   REVEAL MODAL — celebratory completion popup
+   ============================================================ */
+.reveal-overlay{
+  position:fixed;inset:0;z-index:9997;
+  background:rgba(20,16,40,0.65);
+  backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.25s;
+}
+.reveal-overlay.show{opacity:1;pointer-events:auto;}
+.reveal-card{
+  position:relative;
+  background:linear-gradient(160deg,#1e1b3a,#2d1b4e 50%,#3a1f5c);
+  border-radius:28px;
+  padding:36px 28px 30px;
+  width:100%;max-width:380px;
+  text-align:center;
+  overflow:hidden;
+  transform:scale(0.7) translateY(30px);
+  opacity:0;
+  transition:transform 0.45s cubic-bezier(.17,.89,.32,1.49),opacity 0.3s;
+  box-shadow:0 30px 80px rgba(0,0,0,0.5);
+}
+.reveal-overlay.show .reveal-card{transform:scale(1) translateY(0);opacity:1;}
+.reveal-glow{
+  position:absolute;top:-50%;left:50%;transform:translateX(-50%);
+  width:300px;height:300px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,0.25),transparent 70%);
+  pointer-events:none;
+}
+.reveal-burst{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:28px;
+}
+.reveal-particle{
+  position:absolute;border-radius:50%;
+  opacity:0;
+}
+.reveal-stamp{
+  display:inline-block;
+  background:rgba(255,255,255,0.12);
+  border:1.5px solid rgba(255,255,255,0.25);
+  color:#fff;font-weight:800;font-size:0.7rem;letter-spacing:0.1em;
+  padding:5px 14px;border-radius:20px;
+  margin-bottom:18px;
+  text-transform:uppercase;
+  position:relative;z-index:2;
+}
+.reveal-stamp.wrong-stamp{background:rgba(239,68,68,0.18);border-color:rgba(239,68,68,0.4);}
+.reveal-word-wrap{
+  position:relative;z-index:2;
+  min-height:64px;
+  display:flex;align-items:center;justify-content:center;
+  gap:4px;margin-bottom:8px;flex-wrap:wrap;
+}
+.reveal-letter{
+  display:inline-block;
+  font-size:2.4rem;font-weight:900;color:#fff;
+  opacity:0;transform:translateY(18px) scale(0.5) rotate(-8deg);
+  animation:letterPop 0.5s cubic-bezier(.17,.89,.32,1.49) forwards;
+  text-shadow:0 4px 20px rgba(124,58,237,0.6);
+}
+.reveal-letter.hero-letter{
+  color:#FFD93D;
+  text-shadow:0 4px 24px rgba(255,217,61,0.7);
+}
+@keyframes letterPop{
+  to{opacity:1;transform:translateY(0) scale(1) rotate(0deg);}
+}
+.reveal-sentence{
+  position:relative;z-index:2;
+  font-size:1.25rem;font-weight:700;color:#fff;
+  line-height:1.5;margin-bottom:6px;
+  direction:ltr;
+}
+.reveal-sentence .hero-word{
+  color:#FFD93D;
+  display:inline-block;
+  animation:heroWordPop 0.55s cubic-bezier(.17,.89,.32,1.49) forwards;
+  animation-delay:0.25s;
+  opacity:0;transform:scale(0.4);
+}
+@keyframes heroWordPop{
+  to{opacity:1;transform:scale(1);}
+}
+.reveal-translation{
+  position:relative;z-index:2;
+  color:rgba(255,255,255,0.6);
+  font-size:0.92rem;margin-top:10px;
+  opacity:0;animation:fadeInUp 0.4s ease forwards;
+  animation-delay:0.5s;
+}
+@keyframes fadeInUp{
+  from{opacity:0;transform:translateY(8px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.reveal-points{
+  position:relative;z-index:2;
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,217,61,0.15);
+  border:1px solid rgba(255,217,61,0.35);
+  color:#FFD93D;font-weight:800;font-size:0.95rem;
+  padding:8px 18px;border-radius:20px;
+  margin-top:16px;
+  opacity:0;animation:fadeInUp 0.4s ease forwards;
+  animation-delay:0.65s;
+}
+.reveal-points.wrong-points{
+  background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);
+}
+.reveal-continue-btn{
+  position:relative;z-index:2;
+  width:100%;margin-top:22px;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff;border:none;padding:15px;border-radius:16px;
+  font-size:1rem;font-weight:700;cursor:pointer;
+  opacity:0;animation:fadeInUp 0.4s ease forwards;
+  animation-delay:0.8s;
+}
+.reveal-continue-btn:active{transform:scale(0.97);}
+.reveal-mascot{
+  font-size:2.6rem;
+  position:relative;z-index:2;
+  display:inline-block;
+  margin-bottom:6px;
+  animation:mascotBounce 0.7s cubic-bezier(.17,.89,.32,1.49);
+}
+@keyframes mascotBounce{
+  0%{transform:scale(0) rotate(-20deg);}
+  60%{transform:scale(1.25) rotate(8deg);}
+  100%{transform:scale(1) rotate(0deg);}
+}
+
+/* ============================================================
+   SPLASH SCREEN
+   ============================================================ */
+#splashScreen{
+  position:fixed;inset:0;z-index:99999;
+  background:radial-gradient(ellipse at 50% 30%,#3d2f73,#1a1438 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+#splashScreen.fade-out{
+  animation:splashFadeOut 0.5s ease forwards;
+}
+@keyframes splashFadeOut{
+  to{opacity:0;transform:scale(1.05);}
+}
+.splash-orb{
+  position:absolute;border-radius:50%;
+  filter:blur(40px);opacity:0.5;
+}
+.splash-logo-wrap{
+  position:relative;z-index:2;
+  display:flex;flex-direction:column;align-items:center;
+}
+.splash-emoji{
+  font-size:4.5rem;
+  transform:scale(0);
+  animation:splashEmojiIn 0.6s cubic-bezier(.17,.89,.32,1.49) forwards;
+  animation-delay:0.1s;
+  filter:drop-shadow(0 8px 30px rgba(124,58,237,0.6));
+}
+@keyframes splashEmojiIn{
+  0%{transform:scale(0) rotate(-30deg);}
+  60%{transform:scale(1.3) rotate(10deg);}
+  100%{transform:scale(1) rotate(0deg);}
+}
+.splash-title{
+  font-size:2.3rem;font-weight:900;color:#fff;
+  letter-spacing:-0.02em;margin-top:14px;
+  opacity:0;
+  animation:splashTextIn 0.5s ease forwards;
+  animation-delay:0.4s;
+  background:linear-gradient(135deg,#fff,#c4b5fd);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+@keyframes splashTextIn{
+  from{opacity:0;transform:translateY(14px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.splash-tagline{
+  color:rgba(255,255,255,0.55);font-size:0.92rem;margin-top:8px;
+  opacity:0;
+  animation:splashTextIn 0.5s ease forwards;
+  animation-delay:0.6s;
+}
+.splash-bar-track{
+  width:140px;height:4px;border-radius:4px;
+  background:rgba(255,255,255,0.15);
+  margin-top:28px;overflow:hidden;
+  opacity:0;
+  animation:splashTextIn 0.4s ease forwards;
+  animation-delay:0.75s;
+}
+.splash-bar-fill{
+  height:100%;border-radius:4px;
+  background:linear-gradient(90deg,#667eea,#FFD93D);
+  width:0%;
+  animation:splashBarFill 1.1s ease-out forwards;
+  animation-delay:0.8s;
+}
+@keyframes splashBarFill{
+  to{width:100%;}
+}
+.splash-spark{
+  position:absolute;
+  border-radius:50%;
+  opacity:0;
+}
+
 </style>
+
 </head>
 <body>
+
+<!-- ===== SPLASH SCREEN ===== -->
+<div id="splashScreen">
+  <div class="splash-logo-wrap">
+    <span class="splash-emoji">📖</span>
+    <div class="splash-title">WordUp</div>
+    <div class="splash-tagline">לומדים אנגלית. כיף בטירוף.</div>
+    <div class="splash-bar-track"><div class="splash-bar-fill"></div></div>
+  </div>
+</div>
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
@@ -521,10 +764,15 @@ body{
   <div class="onboard-title">WordUp</div>
   <div class="onboard-sub">לומדים אנגלית בדרך המהנה ביותר</div>
   <div class="onboard-card">
-    <label for="nameInput">👋 מה שמך?</label>
+    <label for="nameInput">מה שמך?</label>
     <input id="nameInput" type="text" placeholder="הכנס את שמך..." maxlength="20" dir="rtl">
+    <label style="margin-top:14px;">את/ה?</label>
+    <div class="difficulty-btns" id="genderBtns" style="margin-bottom:4px;">
+      <button class="diff-btn selected" data-gender="male" onclick="selectGender(this)">זכר</button>
+      <button class="diff-btn" data-gender="female" onclick="selectGender(this)">נקבה</button>
+    </div>
     <button class="btn-start" onclick="startApp()">בואו נתחיל! →</button>
-    <div class="onboard-tip">✨ ניתן ללמוד בחינם, בלי הרשמה</div>
+    <div class="onboard-tip">ניתן ללמוד בחינם, בלי הרשמה</div>
   </div>
 </div>
 
@@ -728,6 +976,20 @@ body{
       </div>
     </div>
 
+    <!-- reveal toggle -->
+    <div class="admin-section">
+      <h3>✨ אנימציית השלמה</h3>
+      <div class="toggle-row">
+        <div class="toggle-row-text">
+          <div class="toggle-row-title">חלון השלמה אינטראקטיבי</div>
+          <div class="toggle-row-sub">הצגת אנימציה מגניבה כשמשלימים אות או משפט</div>
+        </div>
+        <button class="switch" id="revealToggle" onclick="toggleRevealSetting()">
+          <span class="switch-knob"></span>
+        </button>
+      </div>
+    </div>
+
     <!-- add word -->
     <div class="admin-section">
       <h3>➕ הוסף מילה</h3>
@@ -761,6 +1023,21 @@ body{
       <button class="btn-primary btn-sm btn-danger" style="margin-top:6px;" onclick="adminResetAll()">⚠️ איפוס מלא (כולל מילים)</button>
     </div>
     <div style="height:24px;"></div>
+  </div>
+</div>
+
+<!-- ===== REVEAL MODAL (completion celebration) ===== -->
+<div class="reveal-overlay" id="revealOverlay">
+  <div class="reveal-card" id="revealCard">
+    <div class="reveal-glow"></div>
+    <div class="reveal-burst" id="revealBurst"></div>
+    <div class="reveal-stamp" id="revealStamp">נכון!</div>
+    <div class="reveal-mascot" id="revealMascot">🎉</div>
+    <div class="reveal-word-wrap" id="revealWordWrap"></div>
+    <div class="reveal-sentence hidden" id="revealSentence"></div>
+    <div class="reveal-translation" id="revealTranslation"></div>
+    <div class="reveal-points" id="revealPoints"></div>
+    <button class="reveal-continue-btn" id="revealContinueBtn" onclick="closeRevealModal()">המשך</button>
   </div>
 </div>
 
@@ -928,9 +1205,74 @@ ALL_LEVELS.push(...[
 ]);
 
 // ============================================================
+// SENTENCES – השלמת משפט עם מילה חסרה (___)
+// כל משפט: text עם ___ במקום המילה, correct=המילה הנכונה, he=תרגום לעברית
+// ============================================================
+const SENTENCES=[
+{text:"I ___ to school every day.",correct:"go",he:"אני הולך לבית הספר כל יום"},
+{text:"She ___ a beautiful dress.",correct:"wears",he:"היא לובשת שמלה יפה"},
+{text:"They ___ football on weekends.",correct:"play",he:"הם משחקים כדורגל בסופי שבוע"},
+{text:"He ___ his homework every night.",correct:"does",he:"הוא עושה שיעורי בית כל ערב"},
+{text:"We ___ pizza for dinner.",correct:"ate",he:"אכלנו פיצה לארוחת ערב"},
+{text:"The sun ___ in the east.",correct:"rises",he:"השמש זורחת במזרח"},
+{text:"My mother ___ in a hospital.",correct:"works",he:"אמא שלי עובדת בבית חולים"},
+{text:"I ___ a new book yesterday.",correct:"bought",he:"קניתי ספר חדש אתמול"},
+{text:"Can you ___ me with this?",correct:"help",he:"אתה יכול לעזור לי עם זה?"},
+{text:"She ___ very fast.",correct:"runs",he:"היא רצה מהר מאוד"},
+{text:"The children ___ in the park.",correct:"play",he:"הילדים משחקים בפארק"},
+{text:"I ___ coffee every morning.",correct:"drink",he:"אני שותה קפה כל בוקר"},
+{text:"He ___ to music while studying.",correct:"listens",he:"הוא מקשיב למוזיקה בזמן הלימודים"},
+{text:"We ___ a movie last night.",correct:"watched",he:"צפינו בסרט אתמול בלילה"},
+{text:"Please ___ the door.",correct:"close",he:"בבקשה סגור את הדלת"},
+{text:"She ___ her keys at home.",correct:"forgot",he:"היא שכחה את המפתחות בבית"},
+{text:"I ___ to the gym three times a week.",correct:"go",he:"אני הולך לחדר כושר שלוש פעמים בשבוע"},
+{text:"They ___ in Paris for a week.",correct:"stayed",he:"הם נשארו בפריז שבוע"},
+{text:"He ___ his car every weekend.",correct:"washes",he:"הוא שוטף את האוטו שלו כל סוף שבוע"},
+{text:"I ___ you a letter last week.",correct:"sent",he:"שלחתי לך מכתב בשבוע שעבר"},
+{text:"The dog ___ at strangers.",correct:"barks",he:"הכלב נובח על זרים"},
+{text:"She ___ the violin beautifully.",correct:"plays",he:"היא מנגנת בכינור בצורה יפה"},
+{text:"We ___ to the beach tomorrow.",correct:"will go",he:"אנחנו נלך לחוף הים מחר"},
+{text:"I ___ my keys somewhere.",correct:"lost",he:"איבדתי את המפתחות שלי איפשהו"},
+{text:"He ___ English fluently.",correct:"speaks",he:"הוא דובר אנגלית בשטף"},
+{text:"They ___ a new house last year.",correct:"bought",he:"הם קנו בית חדש בשנה שעברה"},
+{text:"She always ___ her teeth before bed.",correct:"brushes",he:"היא תמיד מצחצחת שיניים לפני השינה"},
+{text:"I ___ breakfast at 7am.",correct:"eat",he:"אני אוכל ארוחת בוקר בשעה 7"},
+{text:"The teacher ___ the lesson clearly.",correct:"explained",he:"המורה הסביר את השיעור בבירור"},
+{text:"We ___ a great time at the party.",correct:"had",he:"היה לנו זמן נהדר במסיבה"},
+{text:"He ___ his phone yesterday.",correct:"broke",he:"הוא שבר את הטלפון שלו אתמול"},
+{text:"I ___ on a diet right now.",correct:"am",he:"אני בדיאטה כרגע"},
+{text:"She ___ the test easily.",correct:"passed",he:"היא עברה את המבחן בקלות"},
+{text:"They ___ to the airport early.",correct:"arrived",he:"הם הגיעו לשדה התעופה מוקדם"},
+{text:"I ___ a letter to my friend.",correct:"wrote",he:"כתבתי מכתב לחבר שלי"},
+{text:"He ___ his job last month.",correct:"quit",he:"הוא עזב את העבודה שלו בחודש שעבר"},
+{text:"We ___ the museum on Sunday.",correct:"visited",he:"ביקרנו במוזיאון ביום ראשון"},
+{text:"She ___ very hard for the exam.",correct:"studied",he:"היא למדה מאוד קשה למבחן"},
+{text:"I ___ my umbrella at home today.",correct:"forgot",he:"שכחתי את המטרייה שלי בבית היום"},
+{text:"They ___ a song together.",correct:"sang",he:"הם שרו שיר ביחד"},
+{text:"He ___ the ball to his friend.",correct:"threw",he:"הוא זרק את הכדור לחבר שלו"},
+{text:"I ___ in this city for ten years.",correct:"have lived",he:"אני גר בעיר הזו עשר שנים"},
+{text:"She ___ a delicious cake.",correct:"baked",he:"היא אפתה עוגה טעימה"},
+{text:"We ___ the bus and walked instead.",correct:"missed",he:"פספסנו את האוטובוס והלכנו ברגל במקום"},
+{text:"He ___ his room every Saturday.",correct:"cleans",he:"הוא מנקה את החדר שלו כל יום שבת"},
+{text:"I ___ to see you soon.",correct:"hope",he:"אני מקווה לראות אותך בקרוב"},
+{text:"She ___ the package this morning.",correct:"received",he:"היא קיבלה את החבילה הבוקר"},
+{text:"They ___ the company together.",correct:"founded",he:"הם ייסדו את החברה ביחד"},
+{text:"I ___ a headache since this morning.",correct:"have had",he:"יש לי כאב ראש מאז הבוקר"},
+{text:"He ___ his bike to work.",correct:"rides",he:"הוא רוכב על האופניים שלו לעבודה"},
+{text:"We ___ the river by boat.",correct:"crossed",he:"חצינו את הנהר בסירה"}
+];
+
+// ============================================================
+// LETTER PUZZLES – השלמת אות חסרה במילה
+// ============================================================
+const LETTER_BANK_SIZE=4;
+
+// ============================================================
 // STATE
 // ============================================================
 let userName = localStorage.getItem('wup_name') || '';
+let userGender = localStorage.getItem('wup_gender') || 'male';
+let selectedOnboardGender = 'male';
 let score = parseInt(localStorage.getItem('wup_score')) || 0;
 let learnedWords = JSON.parse(localStorage.getItem('wup_learned')) || [];
 let wrongWords = JSON.parse(localStorage.getItem('wup_wrong')) || [];
@@ -938,6 +1280,7 @@ let totalAnswers = parseInt(localStorage.getItem('wup_total')) || 0;
 let correctAnswers = parseInt(localStorage.getItem('wup_correct')) || 0;
 let streak = parseInt(localStorage.getItem('wup_streak')) || 0;
 let lastPlayDate = localStorage.getItem('wup_lastdate') || '';
+let revealEnabled = localStorage.getItem('wup_reveal_enabled')!=='off'; // default ON
 
 // Game state
 let currentLevel = null;
@@ -1013,29 +1356,51 @@ function updateStreak(){
 }
 
 // ============================================================
-// DYNAMIC GREETINGS
+// DYNAMIC GREETINGS (gendered, text only — no emoji)
 // ============================================================
-const GREETINGS=[
-  (n,prog)=>`היי ${n}! 👋 מה שלומך היום?`,
-  (n,prog)=>`ברוך הבא בחזרה, ${n}! בוא נמשיך ללמוד 🚀`,
-  (n,prog)=>`${n}, מה בא לך ללמוד היום? 📚`,
-  (n,prog)=>`שלום ${n}! מוכן לאתגר חדש? 💪`,
-  (n,prog)=>`היי ${n}, כיף לראות אותך! בוא נתרגל קצת 🎯`,
-  (n,prog)=>`${n}! כבר לא ראינו אותך... בוא נלמד! ✨`,
-  (n,prog)=>`בוקר טוב ${n}! Good morning! ☀️`,
+const GREETINGS_MALE=[
+  n=>`היי ${n}! מה שלומך היום?`,
+  n=>`ברוך הבא בחזרה, ${n}! בוא נמשיך ללמוד`,
+  n=>`${n}, מה בא לך ללמוד היום?`,
+  n=>`שלום ${n}! מוכן לאתגר חדש?`,
+  n=>`היי ${n}, כיף לראות אותך! בוא נתרגל קצת`,
+  n=>`${n}! כבר לא ראינו אותך... בוא נלמד`,
+  n=>`בוקר טוב ${n}!`,
+  n=>`${n}, מוכן להמשיך מאיפה שעצרת?`,
 ];
 
-const SUBS=[
-  n=>`סה"כ למדת ${learnedWords.length} מילים – כל הכבוד!`,
+const GREETINGS_FEMALE=[
+  n=>`היי ${n}! מה שלומך היום?`,
+  n=>`ברוכה הבאה בחזרה, ${n}! בואי נמשיך ללמוד`,
+  n=>`${n}, מה בא לך ללמוד היום?`,
+  n=>`שלום ${n}! מוכנה לאתגר חדש?`,
+  n=>`היי ${n}, כיף לראות אותך! בואי נתרגל קצת`,
+  n=>`${n}! כבר לא ראינו אותך... בואי נלמד`,
+  n=>`בוקר טוב ${n}!`,
+  n=>`${n}, מוכנה להמשיך מאיפה שעצרת?`,
+];
+
+const SUBS_MALE=[
+  n=>`סה"כ למדת ${learnedWords.length} מילים – כל הכבוד`,
   n=>`דיוק שלך: ${accuracy()}% – ${accuracy()>80?'מדהים!':'בוא נשפר!'}`,
-  n=>`${learnedWords.length} מילים, ${streak} ימים רצופים 🔥`,
-  n=>`הנושא המוביל שלך מחכה – תבחר ותתחיל!`,
-  n=>`כל מילה שתלמד היום היא ניצחון! 🏆`,
+  n=>`${learnedWords.length} מילים, ${streak} ימים רצופים`,
+  n=>`הנושא המוביל שלך מחכה – תבחר ותתחיל`,
+  n=>`כל מילה שתלמד היום היא ניצחון`,
+];
+
+const SUBS_FEMALE=[
+  n=>`סה"כ למדת ${learnedWords.length} מילים – כל הכבוד`,
+  n=>`דיוק שלך: ${accuracy()}% – ${accuracy()>80?'מדהים!':'בואי נשפר!'}`,
+  n=>`${learnedWords.length} מילים, ${streak} ימים רצופים`,
+  n=>`הנושא המוביל שלך מחכה – תבחרי ותתחילי`,
+  n=>`כל מילה שתלמדי היום היא ניצחון`,
 ];
 
 function buildGreeting(){
-  const g=GREETINGS[Math.floor(Math.random()*GREETINGS.length)](userName,learnedWords.length);
-  const s=SUBS[Math.floor(Math.random()*SUBS.length)](userName);
+  const list=userGender==='female'?GREETINGS_FEMALE:GREETINGS_MALE;
+  const subList=userGender==='female'?SUBS_FEMALE:SUBS_MALE;
+  const g=list[Math.floor(Math.random()*list.length)](userName);
+  const s=subList[Math.floor(Math.random()*subList.length)](userName);
   $('greetingText').textContent=g;
   $('greetingSubText').textContent=s;
   speakGreeting(g);
@@ -1061,11 +1426,19 @@ function speakGreeting(text){
 // ============================================================
 // ONBOARDING
 // ============================================================
+function selectGender(btn){
+  document.querySelectorAll('#genderBtns [data-gender]').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedOnboardGender=btn.dataset.gender;
+}
+
 function startApp(){
   const n=$('nameInput').value.trim();
   if(!n){showToast('אנא הכנס שם!');return;}
   userName=n;
+  userGender=selectedOnboardGender;
   localStorage.setItem('wup_name',userName);
+  localStorage.setItem('wup_gender',userGender);
   enterHome();
 }
 
@@ -1125,12 +1498,53 @@ function goHome(){
 // ============================================================
 // GAME ENGINE
 // ============================================================
+function buildLetterQuestion(word){
+  // word.en must be at least 3 letters to make a good puzzle
+  const w=word.en;
+  if(w.replace(/[^a-zA-Z]/g,'').length<3)return null;
+  const letters=w.split('');
+  // pick a random alphabetic index to blank out
+  const alphaIdx=[];
+  letters.forEach((c,i)=>{if(/[a-zA-Z]/.test(c))alphaIdx.push(i);});
+  const blankPos=alphaIdx[Math.floor(Math.random()*alphaIdx.length)];
+  const correctLetter=letters[blankPos].toLowerCase();
+  const displayLetters=letters.slice();
+  displayLetters[blankPos]='_';
+  const display=displayLetters.join('');
+  // build a bank of 4 letters (1 correct + 3 distractors)
+  const alphabet='abcdefghijklmnopqrstuvwxyz'.split('').filter(l=>l!==correctLetter);
+  shuffle(alphabet);
+  const bank=shuffle([correctLetter,...alphabet.slice(0,3)]);
+  return {type:'letter',display,correct:correctLetter,bank,en:word.en,he:word.he,fullWord:w};
+}
+
+function buildSentenceQuestion(){
+  const s=SENTENCES[Math.floor(Math.random()*SENTENCES.length)];
+  // build a bank of 4 words (1 correct + 3 distractors from other sentences)
+  const distractorPool=SENTENCES.filter(x=>x.correct.toLowerCase()!==s.correct.toLowerCase()).map(x=>x.correct);
+  shuffle(distractorPool);
+  const bank=shuffle([s.correct,...distractorPool.slice(0,3)]);
+  return {type:'sentence',display:s.text,correct:s.correct,bank,he:s.he};
+}
+
 function buildQuestions(words){
   const qs=[];
   words.forEach(w=>{
     qs.push({type:'en-to-he',question:w.en,correct:w.he,en:w.en,he:w.he});
     qs.push({type:'he-to-en',question:w.he,correct:w.en,en:w.en,he:w.he});
   });
+  // sprinkle in letter-completion questions for eligible words
+  const eligible=words.filter(w=>w.en.replace(/[^a-zA-Z]/g,'').length>=3);
+  shuffle(eligible);
+  eligible.slice(0,Math.max(1,Math.floor(words.length/3))).forEach(w=>{
+    const lq=buildLetterQuestion(w);
+    if(lq)qs.push(lq);
+  });
+  // sprinkle in 1-2 sentence-completion questions per level
+  const sentenceCount=Math.min(2,Math.max(1,Math.floor(words.length/6)));
+  for(let i=0;i<sentenceCount;i++){
+    qs.push(buildSentenceQuestion());
+  }
   return shuffle(qs);
 }
 
@@ -1173,10 +1587,58 @@ function loadQ(){
   const pct=(currentQIndex/currentQuestions.length)*100;
   $('gameProg').style.width=pct+'%';
   $('qCounter').textContent=(currentQIndex+1)+'/'+currentQuestions.length;
-  $('qTypeBadge').textContent=q.type==='en-to-he'?'🇬🇧→🇮🇱 תרגם לעברית':'🇮🇱→🇬🇧 תרגם לאנגלית';
+
+  const grid=$('optionsList');
+  grid.innerHTML='';
+
+  if(q.type==='letter'){
+    $('qTypeBadge').textContent='השלם את האות החסרה';
+    $('wordMain').textContent=q.display.toUpperCase();
+    $('wordMain').className='word-main';
+    $('wordMain').setAttribute('dir','ltr');
+    $('wordHint').textContent=q.he;
+    $('audioBtn').onclick=()=>speak(q.fullWord,'en');
+    speak(q.fullWord,'en');
+    grid.className='options-list';
+    grid.setAttribute('dir','ltr');
+    q.bank.forEach(letter=>{
+      const btn=document.createElement('button');
+      btn.className='opt-btn';
+      btn.textContent=letter.toUpperCase();
+      btn.setAttribute('dir','ltr');
+      btn.addEventListener('click',()=>checkQ(letter,q,btn));
+      grid.appendChild(btn);
+    });
+    return;
+  }
+
+  if(q.type==='sentence'){
+    $('qTypeBadge').textContent='השלם את המשפט';
+    $('wordMain').textContent=q.display;
+    $('wordMain').className='word-main large-word';
+    $('wordMain').setAttribute('dir','ltr');
+    $('wordHint').textContent=q.he;
+    $('audioBtn').onclick=()=>speak(q.display.replace('___',q.correct),'en');
+    speak(q.display.replace('___','...'),'en');
+    grid.className='options-list';
+    grid.setAttribute('dir','ltr');
+    q.bank.forEach(word=>{
+      const btn=document.createElement('button');
+      btn.className='opt-btn';
+      btn.textContent=word;
+      btn.setAttribute('dir','ltr');
+      btn.addEventListener('click',()=>checkQ(word,q,btn));
+      grid.appendChild(btn);
+    });
+    return;
+  }
+
+  // default: en-to-he / he-to-en
+  $('qTypeBadge').textContent=q.type==='en-to-he'?'תרגם לעברית':'תרגם לאנגלית';
   const isLong=q.question.length>20;
   $('wordMain').textContent=q.question;
   $('wordMain').className='word-main'+(isLong?' large-word':'');
+  $('wordMain').setAttribute('dir',q.type==='en-to-he'?'ltr':'rtl');
   $('wordHint').textContent='';
   const lang=q.type==='en-to-he'?'en':'he';
   speak(q.question,lang);
@@ -1188,13 +1650,13 @@ function loadQ(){
   let pool=(q.type==='en-to-he'?allWordsFlat.map(w=>w.he):allWordsFlat.map(w=>w.en)).filter(v=>v!==q.correct);
   pool=shuffle(pool).slice(0,3);
   const opts=shuffle([q.correct,...pool]);
-  const grid=$('optionsList');
   grid.className='options-list'+(q.question.includes(' ')?'':' ');
-  grid.innerHTML='';
+  grid.setAttribute('dir',q.type==='en-to-he'?'rtl':'ltr');
   opts.forEach(o=>{
     const btn=document.createElement('button');
     btn.className='opt-btn';
     btn.textContent=o;
+    btn.setAttribute('dir',q.type==='en-to-he'?'rtl':'ltr');
     btn.addEventListener('click',()=>checkQ(o,q,btn));
     grid.appendChild(btn);
   });
@@ -1204,22 +1666,76 @@ function checkQ(selected,q,btn){
   if(isAnswering)return;
   isAnswering=true;
   totalAnswers++;
-  const correct=selected===q.correct;
+  const correct=(q.type==='letter')
+    ? selected.toLowerCase()===q.correct.toLowerCase()
+    : selected===q.correct;
+  const pointsDelta=correct?10:-3;
+
   if(correct){
     score+=10;correctAnswers++;sessionCorrect++;sessionScore+=10;
-    btn.classList.add('correct');
-    $('feedbackBox').className='feedback-box correct';
-    $('feedbackBox').textContent='✅ נכון! +10 נקודות';
-    if(!learnedWords.includes(q.en))learnedWords.push(q.en);
-    wrongWords=wrongWords.filter(w=>w.en!==q.en);
-    speak(q.correct,q.type==='en-to-he'?'he':'en');
   }else{
     score=Math.max(0,score-3);sessionWrong++;
-    btn.classList.add('wrong');
-    document.querySelectorAll('#optionsList .opt-btn').forEach(b=>{if(b.textContent===q.correct)b.classList.add('correct');});
-    $('feedbackBox').className='feedback-box wrong';
-    $('feedbackBox').textContent='❌ לא נכון. התשובה: '+q.correct;
-    if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
+  }
+  btn.classList.add(correct?'correct':'wrong');
+
+  // Use the interactive reveal modal for letter/sentence completion (if enabled)
+  if((q.type==='letter'||q.type==='sentence')&&revealEnabled){
+    if(correct){
+      if(q.type==='letter'){
+        if(!learnedWords.includes(q.en))learnedWords.push(q.en);
+        wrongWords=wrongWords.filter(w=>w.en!==q.en);
+      }
+    }else{
+      document.querySelectorAll('#optionsList .opt-btn').forEach(b=>{
+        const bText=q.type==='letter'?b.textContent.toLowerCase():b.textContent;
+        const correctText=q.type==='letter'?q.correct.toLowerCase():q.correct;
+        if(bText===correctText)b.classList.add('correct');
+      });
+      if(q.type==='letter'&&!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
+    }
+    saveState();
+    updateBadges();
+    currentQIndex++;
+    const advance=()=>loadQ();
+    setTimeout(()=>{
+      if(q.type==='letter')showLetterReveal(q,correct,10,advance);
+      else showSentenceReveal(q,correct,10,advance);
+    },350);
+    return;
+  }
+
+  // Standard inline feedback for word translation questions (or reveal disabled)
+  $('feedbackBox').className='feedback-box '+(correct?'correct':'wrong');
+  if(correct){
+    if(q.type==='letter'){
+      $('feedbackBox').textContent='נכון! +10 נקודות — '+q.fullWord;
+      if(!learnedWords.includes(q.en))learnedWords.push(q.en);
+      wrongWords=wrongWords.filter(w=>w.en!==q.en);
+      speak(q.fullWord,'en');
+    }else if(q.type==='sentence'){
+      $('feedbackBox').textContent='נכון! +10 נקודות';
+      speak(q.display.replace('___',q.correct),'en');
+    }else{
+      $('feedbackBox').textContent='נכון! +10 נקודות';
+      if(!learnedWords.includes(q.en))learnedWords.push(q.en);
+      wrongWords=wrongWords.filter(w=>w.en!==q.en);
+      speak(q.correct,q.type==='en-to-he'?'he':'en');
+    }
+  }else{
+    document.querySelectorAll('#optionsList .opt-btn').forEach(b=>{
+      const bText=q.type==='letter'?b.textContent.toLowerCase():b.textContent;
+      const correctText=q.type==='letter'?q.correct.toLowerCase():q.correct;
+      if(bText===correctText)b.classList.add('correct');
+    });
+    if(q.type==='letter'){
+      $('feedbackBox').textContent='לא נכון. המילה: '+q.fullWord;
+      if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
+    }else if(q.type==='sentence'){
+      $('feedbackBox').textContent='לא נכון. התשובה: '+q.correct;
+    }else{
+      $('feedbackBox').textContent='לא נכון. התשובה: '+q.correct;
+      if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
+    }
   }
   $('feedbackBox').classList.remove('hidden');
   saveState();
@@ -1314,10 +1830,11 @@ function loadChalQ(){
   const pct=(chalIndex/chalQuestions.length)*100;
   $('chalProg').style.width=pct+'%';
   $('chalCounter').textContent=(chalIndex+1)+'/'+chalQuestions.length;
-  $('chalTypeBadge').textContent=q.type==='en-to-he'?'🇬🇧→🇮🇱 תרגם לעברית':'🇮🇱→🇬🇧 תרגם לאנגלית';
+  $('chalTypeBadge').textContent=q.type==='en-to-he'?'תרגם לעברית':'תרגם לאנגלית';
   const isLong=q.question.length>20;
   $('chalWordMain').textContent=q.question;
   $('chalWordMain').className='word-main'+(isLong?' large-word':'');
+  $('chalWordMain').setAttribute('dir',q.type==='en-to-he'?'ltr':'rtl');
   const lang=q.type==='en-to-he'?'en':'he';
   speak(q.question,lang);
   $('chalAudioBtn').onclick=()=>speak(q.question,lang);
@@ -1329,10 +1846,12 @@ function loadChalQ(){
   const opts=shuffle([q.correct,...pool]);
   const grid=$('chalOptionsList');
   grid.innerHTML='';
+  grid.setAttribute('dir',q.type==='en-to-he'?'rtl':'ltr');
   opts.forEach(o=>{
     const btn=document.createElement('button');
     btn.className='opt-btn';
     btn.textContent=o;
+    btn.setAttribute('dir',q.type==='en-to-he'?'rtl':'ltr');
     btn.addEventListener('click',()=>checkChalQ(o,q,btn));
     grid.appendChild(btn);
   });
@@ -1389,6 +1908,157 @@ function backToSetup(){
 }
 
 // ============================================================
+// REVEAL MODAL — interactive completion celebration
+// ============================================================
+let revealCloseCallback=null;
+const CORRECT_MASCOTS=['🎉','🚀','⭐','🏆','🔥','✨','💎','🦄'];
+const WRONG_MASCOTS=['💪','🙂','📚','👍'];
+const PARTICLE_COLORS=['#FFD93D','#667eea','#f5576c','#4facfe','#22C55E','#f093fb'];
+
+function buildParticles(container,count,correct){
+  container.innerHTML='';
+  for(let i=0;i<count;i++){
+    const p=document.createElement('div');
+    p.className='reveal-particle';
+    const size=correct?(Math.random()*8+5):(Math.random()*5+3);
+    const color=correct?PARTICLE_COLORS[Math.floor(Math.random()*PARTICLE_COLORS.length)]:'rgba(255,255,255,0.3)';
+    const startX=50+(Math.random()*30-15);
+    const angle=Math.random()*Math.PI*2;
+    const dist=correct?(60+Math.random()*120):(20+Math.random()*40);
+    const endX=startX+Math.cos(angle)*dist*0.6;
+    const endY=30+Math.sin(angle)*dist*0.8;
+    const delay=Math.random()*0.15;
+    const dur=0.7+Math.random()*0.6;
+    p.style.cssText=`
+      width:${size}px;height:${size}px;background:${color};
+      left:${startX}%;top:30%;
+      animation:particleFly${i%2} ${dur}s ease-out ${delay}s forwards;
+    `;
+    // inject a unique-ish keyframe via style tag (simpler: use CSS vars + a shared keyframe)
+    p.style.setProperty('--ex',(endX-startX)+'%');
+    p.style.setProperty('--ey',(endY-30)+'%');
+    container.appendChild(p);
+  }
+}
+
+// shared particle keyframes (inserted once)
+(function injectParticleKeyframes(){
+  const style=document.createElement('style');
+  style.textContent=`
+    @keyframes particleFly0{
+      0%{opacity:1;transform:translate(0,0) scale(1);}
+      100%{opacity:0;transform:translate(var(--ex),var(--ey)) scale(0.3);}
+    }
+    @keyframes particleFly1{
+      0%{opacity:1;transform:translate(0,0) scale(1) rotate(0deg);}
+      100%{opacity:0;transform:translate(var(--ex),var(--ey)) scale(0.2) rotate(180deg);}
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+function vibrate(pattern){
+  if(navigator.vibrate){try{navigator.vibrate(pattern);}catch(e){}}
+}
+
+function showLetterReveal(q,correct,pointsDelta,onClose){
+  const overlay=$('revealOverlay');
+  const card=$('revealCard');
+  const stamp=$('revealStamp');
+  const mascot=$('revealMascot');
+  const wordWrap=$('revealWordWrap');
+  const sentenceEl=$('revealSentence');
+  const translationEl=$('revealTranslation');
+  const pointsEl=$('revealPoints');
+  const burst=$('revealBurst');
+
+  sentenceEl.classList.add('hidden');
+  wordWrap.classList.remove('hidden');
+  wordWrap.innerHTML='';
+  wordWrap.setAttribute('dir','ltr');
+
+  stamp.textContent=correct?'מעולה!':'כמעט!';
+  stamp.className='reveal-stamp'+(correct?'':' wrong-stamp');
+  mascot.textContent=(correct?CORRECT_MASCOTS:WRONG_MASCOTS)[Math.floor(Math.random()*(correct?CORRECT_MASCOTS:WRONG_MASCOTS).length)];
+
+  const word=q.fullWord;
+  word.split('').forEach((ch,i)=>{
+    const span=document.createElement('span');
+    span.className='reveal-letter'+(ch.toLowerCase()===q.correct.toLowerCase()?' hero-letter':'');
+    span.textContent=ch.toUpperCase();
+    span.style.animationDelay=(i*0.07)+'s';
+    wordWrap.appendChild(span);
+  });
+
+  translationEl.textContent=q.he;
+  pointsEl.textContent=correct?('+'+pointsDelta+' נקודות'):'נסה את הבא!';
+  pointsEl.className='reveal-points'+(correct?'':' wrong-points');
+
+  buildParticles(burst,correct?28:10,correct);
+  overlay.classList.add('show');
+  vibrate(correct?[30,40,60]:[40]);
+
+  revealCloseCallback=onClose;
+}
+
+function showSentenceReveal(q,correct,pointsDelta,onClose){
+  const overlay=$('revealOverlay');
+  const stamp=$('revealStamp');
+  const mascot=$('revealMascot');
+  const wordWrap=$('revealWordWrap');
+  const sentenceEl=$('revealSentence');
+  const translationEl=$('revealTranslation');
+  const pointsEl=$('revealPoints');
+  const burst=$('revealBurst');
+
+  wordWrap.classList.add('hidden');
+  sentenceEl.classList.remove('hidden');
+  sentenceEl.setAttribute('dir','ltr');
+
+  stamp.textContent=correct?'מעולה!':'כמעט!';
+  stamp.className='reveal-stamp'+(correct?'':' wrong-stamp');
+  mascot.textContent=(correct?CORRECT_MASCOTS:WRONG_MASCOTS)[Math.floor(Math.random()*(correct?CORRECT_MASCOTS:WRONG_MASCOTS).length)];
+
+  const parts=q.display.split('___');
+  sentenceEl.innerHTML='';
+  const before=document.createTextNode(parts[0]||'');
+  sentenceEl.appendChild(before);
+  const heroSpan=document.createElement('span');
+  heroSpan.className='hero-word';
+  heroSpan.textContent=q.correct;
+  sentenceEl.appendChild(heroSpan);
+  const after=document.createTextNode(parts[1]||'');
+  sentenceEl.appendChild(after);
+
+  translationEl.textContent=q.he;
+  pointsEl.textContent=correct?('+'+pointsDelta+' נקודות'):'נסה את הבא!';
+  pointsEl.className='reveal-points'+(correct?'':' wrong-points');
+
+  buildParticles(burst,correct?28:10,correct);
+  overlay.classList.add('show');
+  vibrate(correct?[30,40,60]:[40]);
+
+  revealCloseCallback=onClose;
+}
+
+function closeRevealModal(){
+  $('revealOverlay').classList.remove('show');
+  const cb=revealCloseCallback;
+  revealCloseCallback=null;
+  if(cb)setTimeout(cb,200);
+}
+
+// ============================================================
+// SPLASH SCREEN
+// ============================================================
+function hideSplash(){
+  const splash=$('splashScreen');
+  if(!splash)return;
+  splash.classList.add('fade-out');
+  setTimeout(()=>{splash.remove();},520);
+}
+
+// ============================================================
 // INIT
 // ============================================================
 if(userName){
@@ -1399,6 +2069,8 @@ if(userName){
   showScreen('homeScreen');
 }
 // else stays on onboarding
+
+setTimeout(hideSplash,1450);
 
 
 // ============================================================
@@ -1460,7 +2132,18 @@ function openAdminScreen(){
     o.textContent=l.emoji+' '+l.name;
     sel.appendChild(o);
   });
+  // reflect reveal toggle state
+  const t=$('revealToggle');
+  if(revealEnabled)t.classList.add('on');else t.classList.remove('on');
   showScreen('adminScreen');
+}
+
+function toggleRevealSetting(){
+  revealEnabled=!revealEnabled;
+  localStorage.setItem('wup_reveal_enabled',revealEnabled?'on':'off');
+  const t=$('revealToggle');
+  if(revealEnabled)t.classList.add('on');else t.classList.remove('on');
+  showToast(revealEnabled?'אנימציית ההשלמה הופעלה':'אנימציית ההשלמה כובתה');
 }
 
 function adminAddWord(){
