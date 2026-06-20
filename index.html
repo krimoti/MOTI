@@ -2,8 +2,18 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>WordUp – לומדים אנגלית</title>
+
+<!-- PWA: Add to Home Screen support -->
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIldvcmRVcCDigJMg15zXldee15PXmdedINeQ16DXktec15nXqiIsICJzaG9ydF9uYW1lIjogIldvcmRVcCIsICJkZXNjcmlwdGlvbiI6ICLXkNek15zXmden16bXmdeUINec15zXmdee15XXkyDXkNeg15LXnNeZ16og15HXk9eo15og157XlNeg15Qg15XXkNeZ16DXmNeo15DXp9eY15nXkdeZ16oiLCAic3RhcnRfdXJsIjogIi4iLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgImJhY2tncm91bmRfY29sb3IiOiAiIzFhMTQzOCIsICJ0aGVtZV9jb2xvciI6ICIjNjY3ZWVhIiwgIm9yaWVudGF0aW9uIjogInBvcnRyYWl0IiwgImxhbmciOiAiaGUiLCAiZGlyIjogInJ0bCIsICJpY29ucyI6IFt7InNyYyI6ICJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI0Yld4dWN6MGlhSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNakF3TUM5emRtY2lJSFpwWlhkQ2IzZzlJakFnTUNBMU1USWdOVEV5SWo0S0lDQThaR1ZtY3o0S0lDQWdJRHhzYVc1bFlYSkhjbUZrYVdWdWRDQnBaRDBpWnlJZ2VERTlJakFsSWlCNU1UMGlNQ1VpSUhneVBTSXhNREFsSWlCNU1qMGlNVEF3SlNJK0NpQWdJQ0FnSUR4emRHOXdJRzltWm5ObGREMGlNQ1VpSUhOMGIzQXRZMjlzYjNJOUlpTTJOamRsWldFaUx6NEtJQ0FnSUNBZ1BITjBiM0FnYjJabWMyVjBQU0l4TURBbElpQnpkRzl3TFdOdmJHOXlQU0lqTnpZMFltRXlJaTgrQ2lBZ0lDQThMMnhwYm1WaGNrZHlZV1JwWlc1MFBnb2dJRHd2WkdWbWN6NEtJQ0E4Y21WamRDQjNhV1IwYUQwaU5URXlJaUJvWldsbmFIUTlJalV4TWlJZ2NuZzlJakV3TUNJZ1ptbHNiRDBpZFhKc0tDTm5LU0l2UGdvZ0lEeDBaWGgwSUhnOUlqSTFOaUlnZVQwaU16SXdJaUJtYjI1MExYTnBlbVU5SWpJMk1DSWdkR1Y0ZEMxaGJtTm9iM0k5SW0xcFpHUnNaU0lnWm05dWRDMW1ZVzFwYkhrOUlpMWhjSEJzWlMxemVYTjBaVzBzU0dWc2RtVjBhV05oTEVGeWFXRnNMSE5oYm5NdGMyVnlhV1lpUHZDZms1WThMM1JsZUhRK0Nqd3ZjM1puUGdvPSIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogImFueSJ9LCB7InNyYyI6ICJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI0Yld4dWN6MGlhSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNakF3TUM5emRtY2lJSFpwWlhkQ2IzZzlJakFnTUNBMU1USWdOVEV5SWo0S0lDQThaR1ZtY3o0S0lDQWdJRHhzYVc1bFlYSkhjbUZrYVdWdWRDQnBaRDBpWnlJZ2VERTlJakFsSWlCNU1UMGlNQ1VpSUhneVBTSXhNREFsSWlCNU1qMGlNVEF3SlNJK0NpQWdJQ0FnSUR4emRHOXdJRzltWm5ObGREMGlNQ1VpSUhOMGIzQXRZMjlzYjNJOUlpTTJOamRsWldFaUx6NEtJQ0FnSUNBZ1BITjBiM0FnYjJabWMyVjBQU0l4TURBbElpQnpkRzl3TFdOdmJHOXlQU0lqTnpZMFltRXlJaTgrQ2lBZ0lDQThMMnhwYm1WaGNrZHlZV1JwWlc1MFBnb2dJRHd2WkdWbWN6NEtJQ0E4Y21WamRDQjNhV1IwYUQwaU5URXlJaUJvWldsbmFIUTlJalV4TWlJZ2NuZzlJakV3TUNJZ1ptbHNiRDBpZFhKc0tDTm5LU0l2UGdvZ0lEeDBaWGgwSUhnOUlqSTFOaUlnZVQwaU16SXdJaUJtYjI1MExYTnBlbVU5SWpJMk1DSWdkR1Y0ZEMxaGJtTm9iM0k5SW0xcFpHUnNaU0lnWm05dWRDMW1ZVzFwYkhrOUlpMWhjSEJzWlMxemVYTjBaVzBzU0dWc2RtVjBhV05oTEVGeWFXRnNMSE5oYm5NdGMyVnlhV1lpUHZDZms1WThMM1JsZUhRK0Nqd3ZjM1puUGdvPSIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogIm1hc2thYmxlIn1dfQ==">
+<meta name="theme-color" content="#667eea">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WordUp">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2NjdlZWEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNzY0YmEyIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEwMCIgZmlsbD0idXJsKCNnKSIvPgogIDx0ZXh0IHg9IjI1NiIgeT0iMzIwIiBmb250LXNpemU9IjI2MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9Ii1hcHBsZS1zeXN0ZW0sSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiPvCfk5Y8L3RleHQ+Cjwvc3ZnPgo=">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2NjdlZWEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNzY0YmEyIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEwMCIgZmlsbD0idXJsKCNnKSIvPgogIDx0ZXh0IHg9IjI1NiIgeT0iMzIwIiBmb250LXNpemU9IjI2MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9Ii1hcHBsZS1zeXN0ZW0sSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiPvCfk5Y8L3RleHQ+Cjwvc3ZnPgo=">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -154,6 +164,52 @@ body{
   letter-spacing:0.08em;
   color:var(--gray-600);
   padding:20px 16px 8px;
+}
+
+/* Install banner */
+.install-banner{
+  margin:14px 16px 0;
+  background:linear-gradient(135deg,#1e1b3a,#3a1f5c);
+  border-radius:16px;
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  box-shadow:var(--shadow-md);
+}
+.install-banner-icon{
+  font-size:1.6rem;flex:0 0 auto;
+  width:42px;height:42px;border-radius:12px;
+  background:rgba(255,255,255,0.1);
+  display:flex;align-items:center;justify-content:center;
+}
+.install-banner-text{flex:1;}
+.install-banner-title{color:#fff;font-weight:700;font-size:0.85rem;}
+.install-banner-sub{color:rgba(255,255,255,0.6);font-size:0.74rem;margin-top:2px;}
+.install-banner-close{
+  background:none;border:none;color:rgba(255,255,255,0.5);
+  font-size:1.1rem;cursor:pointer;padding:4px;flex:0 0 auto;
+}
+.install-banner-btn{
+  background:rgba(255,255,255,0.15);
+  color:#fff;border:none;
+  padding:7px 14px;border-radius:10px;
+  font-size:0.78rem;font-weight:700;
+  cursor:pointer;flex:0 0 auto;
+}
+
+/* Install instructions modal */
+.install-steps{text-align:right;margin-top:4px;}
+.install-step{
+  display:flex;align-items:flex-start;gap:10px;
+  margin-bottom:12px;font-size:0.88rem;color:var(--gray-800);
+  line-height:1.5;
+}
+.install-step-num{
+  flex:0 0 auto;width:24px;height:24px;border-radius:50%;
+  background:var(--purple-light);color:var(--purple);
+  font-weight:800;font-size:0.78rem;
+  display:flex;align-items:center;justify-content:center;
 }
 
 /* Quick actions */
@@ -795,6 +851,16 @@ body{
       </div>
     </div>
 
+    <div class="install-banner hidden" id="installBanner">
+      <div class="install-banner-icon">📲</div>
+      <div class="install-banner-text">
+        <div class="install-banner-title">הוסף למסך הבית</div>
+        <div class="install-banner-sub">גישה מהירה כמו אפליקציה אמיתית</div>
+      </div>
+      <button class="install-banner-btn" onclick="showInstallInstructions()">איך?</button>
+      <button class="install-banner-close" onclick="dismissInstallBanner()">✕</button>
+    </div>
+
     <div class="section-title">תרגול מהיר</div>
     <div class="quick-actions">
       <button class="quick-btn featured" onclick="startQuickPractice()">
@@ -937,6 +1003,25 @@ body{
   </div>
 </div>
 
+
+<!-- ===== INSTALL INSTRUCTIONS MODAL ===== -->
+<div class="modal-overlay hidden" id="installModal">
+  <div class="modal-box">
+    <div class="modal-title">📲 הוספה למסך הבית</div>
+    <div class="modal-sub" id="installPlatformLabel">בחר את הדפדפן שלך</div>
+    <div class="install-steps" id="installStepsIOS">
+      <div class="install-step"><span class="install-step-num">1</span><span>לחץ על כפתור השיתוף <b>Share</b> (הריבוע עם החץ למעלה) בתחתית המסך</span></div>
+      <div class="install-step"><span class="install-step-num">2</span><span>גלול ובחר <b>״הוסף למסך הבית״</b> (Add to Home Screen)</span></div>
+      <div class="install-step"><span class="install-step-num">3</span><span>לחץ <b>״הוסף״</b> — האייקון יופיע במסך הבית שלך</span></div>
+    </div>
+    <div class="install-steps hidden" id="installStepsAndroid">
+      <div class="install-step"><span class="install-step-num">1</span><span>לחץ על תפריט שלוש הנקודות <b>⋮</b> בפינה הימנית העליונה</span></div>
+      <div class="install-step"><span class="install-step-num">2</span><span>בחר <b>״התקן אפליקציה״</b> או <b>״הוסף למסך הבית״</b></span></div>
+      <div class="install-step"><span class="install-step-num">3</span><span>אשר — האייקון יופיע במסך הבית שלך</span></div>
+    </div>
+    <button class="btn-primary" style="margin-top:6px;" onclick="closeInstallInstructions()">הבנתי!</button>
+  </div>
+</div>
 
 <!-- ===== LOGIN MODAL ===== -->
 <div class="modal-overlay hidden" id="adminLoginModal">
@@ -1450,6 +1535,7 @@ function enterHome(){
   renderHome();
   updateBadges();
   showScreen('homeScreen');
+  maybeShowInstallBanner();
 }
 
 // ============================================================
@@ -1524,7 +1610,8 @@ function buildSentenceQuestion(){
   const distractorPool=SENTENCES.filter(x=>x.correct.toLowerCase()!==s.correct.toLowerCase()).map(x=>x.correct);
   shuffle(distractorPool);
   const bank=shuffle([s.correct,...distractorPool.slice(0,3)]);
-  return {type:'sentence',display:s.text,correct:s.correct,bank,he:s.he};
+  // use the full sentence text as a stable identifier for wrong-word tracking
+  return {type:'sentence',display:s.text,correct:s.correct,bank,he:s.he,en:s.text};
 }
 
 function buildQuestions(words){
@@ -1571,8 +1658,9 @@ function startQuickPractice(){
 }
 
 function reviewWrong(){
-  if(wrongWords.length===0){showToast('אין שגיאות לחזרה! 🎉');return;}
-  const pool=wrongWords.slice(-20).map(w=>({en:w.en,he:w.he}));
+  const wordMistakes=wrongWords.filter(w=>w.type!=='sentence');
+  if(wordMistakes.length===0){showToast('אין שגיאות לחזרה!');return;}
+  const pool=wordMistakes.slice(-20).map(w=>({en:w.en,he:w.he}));
   const fakeLevel={id:-2,name:"חזרה על שגיאות",emoji:"📝",words:pool};
   startLevel(fakeLevel);
 }
@@ -1683,15 +1771,15 @@ function checkQ(selected,q,btn){
     if(correct){
       if(q.type==='letter'){
         if(!learnedWords.includes(q.en))learnedWords.push(q.en);
-        wrongWords=wrongWords.filter(w=>w.en!==q.en);
       }
+      wrongWords=wrongWords.filter(w=>w.en!==q.en);
     }else{
       document.querySelectorAll('#optionsList .opt-btn').forEach(b=>{
         const bText=q.type==='letter'?b.textContent.toLowerCase():b.textContent;
         const correctText=q.type==='letter'?q.correct.toLowerCase():q.correct;
         if(bText===correctText)b.classList.add('correct');
       });
-      if(q.type==='letter'&&!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
+      if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:q.type});
     }
     saveState();
     updateBadges();
@@ -1714,6 +1802,7 @@ function checkQ(selected,q,btn){
       speak(q.fullWord,'en');
     }else if(q.type==='sentence'){
       $('feedbackBox').textContent='נכון! +10 נקודות';
+      wrongWords=wrongWords.filter(w=>w.en!==q.en);
       speak(q.display.replace('___',q.correct),'en');
     }else{
       $('feedbackBox').textContent='נכון! +10 נקודות';
@@ -1729,9 +1818,10 @@ function checkQ(selected,q,btn){
     });
     if(q.type==='letter'){
       $('feedbackBox').textContent='לא נכון. המילה: '+q.fullWord;
-      if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
+      if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:'letter'});
     }else if(q.type==='sentence'){
       $('feedbackBox').textContent='לא נכון. התשובה: '+q.correct;
+      if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:'sentence'});
     }else{
       $('feedbackBox').textContent='לא נכון. התשובה: '+q.correct;
       if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he});
@@ -1793,12 +1883,11 @@ function selectQType(btn){
 
 function launchChallenge(){
   const count=parseInt($('chalCount').value)||10;
-  // Filter words by difficulty
+  // Filter words by difficulty: easy = early/simple levels, medium = mid levels, hard = advanced levels
   let pool=[];
-  ALL_LEVELS.forEach(l=>l.words.forEach(w=>pool.push({...w,level:l})));
-  if(selectedDiff==='easy')pool=pool.filter((w,i)=>ALL_LEVELS.findIndex(l=>l.words.includes(w))<10||true).slice(0,80);
-  else if(selectedDiff==='medium')pool=ALL_LEVELS.slice(5,20).flatMap(l=>l.words);
-  else pool=ALL_LEVELS.slice(15).flatMap(l=>l.words);
+  if(selectedDiff==='easy')pool=ALL_LEVELS.slice(0,15).flatMap(l=>l.words);
+  else if(selectedDiff==='medium')pool=ALL_LEVELS.slice(10,30).flatMap(l=>l.words);
+  else pool=ALL_LEVELS.slice(25).flatMap(l=>l.words);
 
   if(pool.length<4){showToast('לא מספיק מילים לאתגר זה');return;}
 
@@ -2059,14 +2148,52 @@ function hideSplash(){
 }
 
 // ============================================================
+// PWA INSTALL BANNER
+// ============================================================
+function isStandaloneMode(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+}
+
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function maybeShowInstallBanner(){
+  if(isStandaloneMode())return; // already installed, never show
+  if(localStorage.getItem('wup_install_dismissed')==='1')return;
+  $('installBanner').classList.remove('hidden');
+}
+
+function dismissInstallBanner(){
+  $('installBanner').classList.add('hidden');
+  localStorage.setItem('wup_install_dismissed','1');
+}
+
+function showInstallInstructions(){
+  const ios=isIOS();
+  $('installPlatformLabel').textContent=ios?'הוראות עבור iPhone / iPad (Safari)':'הוראות עבור Android (Chrome)';
+  $('installStepsIOS').classList.toggle('hidden',!ios);
+  $('installStepsAndroid').classList.toggle('hidden',ios);
+  $('installModal').classList.remove('hidden');
+}
+
+function closeInstallInstructions(){
+  $('installModal').classList.add('hidden');
+  dismissInstallBanner();
+}
+
+// ============================================================
 // INIT
 // ============================================================
+loadCustomWords(); // merge admin-added words BEFORE first render
+
 if(userName){
   updateStreak();
   buildGreeting();
   renderHome();
   updateBadges();
   showScreen('homeScreen');
+  maybeShowInstallBanner();
 }
 // else stays on onboarding
 
@@ -2241,9 +2368,6 @@ function adminResetAll(){
   if(!confirm('⚠️ זה יאפס הכל כולל מילים מותאמות אישית. בטוח?'))return;
   localStorage.clear();location.reload();
 }
-
-// load custom words on startup
-loadCustomWords();
 
 console.log('📖 WordUp loaded! Words:',ALL_LEVELS.reduce((a,l)=>a+l.words.length,0));
 </script>
