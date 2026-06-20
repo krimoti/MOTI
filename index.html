@@ -360,6 +360,43 @@ body{
 .opt-btn.wrong{border-color:var(--red);background:var(--red-light);color:#991b1b;}
 .opt-btn:disabled{cursor:default;}
 
+/* Typing mode */
+.typing-area{display:flex;flex-direction:column;}
+.typing-input{
+  width:100%;padding:16px;
+  border:2px solid var(--gray-200);border-radius:var(--radius);
+  font-size:1.2rem;font-weight:700;text-align:center;
+  color:var(--gray-900);background:#fff;outline:none;
+  letter-spacing:0.02em;
+  transition:border-color 0.2s;
+}
+.typing-input:focus{border-color:var(--purple);}
+.typing-input.correct{border-color:var(--green);background:var(--green-light);color:#166534;}
+.typing-input.wrong{border-color:var(--red);background:var(--red-light);color:#991b1b;}
+
+/* Listening mode visual */
+.listening-visual{
+  display:flex;align-items:center;justify-content:center;
+  gap:5px;height:64px;
+}
+.listening-bar{
+  width:7px;border-radius:4px;
+  background:linear-gradient(180deg,#667eea,#764ba2);
+  animation:listeningPulse 1.1s ease-in-out infinite;
+}
+.listening-bar:nth-child(1){height:20px;animation-delay:0s;}
+.listening-bar:nth-child(2){height:38px;animation-delay:0.1s;}
+.listening-bar:nth-child(3){height:54px;animation-delay:0.2s;}
+.listening-bar:nth-child(4){height:38px;animation-delay:0.3s;}
+.listening-bar:nth-child(5){height:20px;animation-delay:0.4s;}
+@keyframes listeningPulse{
+  0%,100%{transform:scaleY(0.5);opacity:0.6;}
+  50%{transform:scaleY(1);opacity:1;}
+}
+.listening-replay-hint{
+  font-size:0.8rem;color:var(--gray-400);margin-top:6px;
+}
+
 .feedback-box{
   padding:14px 18px;
   border-radius:var(--radius);
@@ -904,6 +941,10 @@ body{
       <div class="word-hint" id="wordHint"></div>
     </div>
     <div class="options-list" id="optionsList"></div>
+    <div class="typing-area hidden" id="typingArea">
+      <input type="text" id="typingInput" class="typing-input" placeholder="הקלד באנגלית..." dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button class="btn-primary" id="typingSubmitBtn" style="margin-top:10px;" onclick="submitTypingAnswer()">בדוק</button>
+    </div>
     <div class="feedback-box correct hidden" id="feedbackBox"></div>
   </div>
 
@@ -1372,6 +1413,8 @@ let currentLevel = null;
 let currentQuestions = [];
 let currentQIndex = 0;
 let isAnswering = false;
+let currentTypingQuestion = null;
+let isReviewSession = false;
 let sessionCorrect = 0;
 let sessionWrong = 0;
 let sessionScore = 0;
@@ -1614,6 +1657,27 @@ function buildSentenceQuestion(){
   return {type:'sentence',display:s.text,correct:s.correct,bank,he:s.he,en:s.text};
 }
 
+function buildListeningQuestion(word){
+  return {type:'listening',question:word.en,correct:word.he,en:word.en,he:word.he};
+}
+
+function buildTypingQuestion(word){
+  return {type:'typing',question:word.he,correct:word.en,en:word.en,he:word.he};
+}
+
+function buildReviewQuestions(words){
+  // Dedicated builder for "review mistakes" — only question types tied to the
+  // exact words the user got wrong. No random sentence-bank injection.
+  const qs=[];
+  words.forEach(w=>{
+    qs.push({type:'en-to-he',question:w.en,correct:w.he,en:w.en,he:w.he});
+    qs.push({type:'he-to-en',question:w.he,correct:w.en,en:w.en,he:w.he});
+    const lq=buildLetterQuestion(w);
+    if(lq)qs.push(lq);
+  });
+  return shuffle(qs);
+}
+
 function buildQuestions(words){
   const qs=[];
   words.forEach(w=>{
@@ -1632,6 +1696,15 @@ function buildQuestions(words){
   for(let i=0;i<sentenceCount;i++){
     qs.push(buildSentenceQuestion());
   }
+  // sprinkle in listening-mode questions (hear it, pick the translation)
+  const listeningPool=shuffle([...words]).slice(0,Math.max(1,Math.floor(words.length/4)));
+  listeningPool.forEach(w=>qs.push(buildListeningQuestion(w)));
+  // sprinkle in typing-mode questions for eligible (simple-enough) words
+  const typingEligible=words.filter(w=>w.en.replace(/[^a-zA-Z]/g,'').length>=3 && w.en.length<=12);
+  shuffle(typingEligible);
+  typingEligible.slice(0,Math.max(1,Math.floor(words.length/5))).forEach(w=>{
+    qs.push(buildTypingQuestion(w));
+  });
   return shuffle(qs);
 }
 
@@ -1640,6 +1713,20 @@ function startLevel(level){
   currentQuestions=buildQuestions(level.words);
   currentQIndex=0;
   sessionCorrect=0;sessionWrong=0;sessionScore=0;
+  isReviewSession=false;
+  $('gameTitle').textContent=level.emoji+' '+level.name;
+  $('gameInner').classList.remove('hidden');
+  $('levelComplete').classList.add('hidden');
+  showScreen('gameScreen');
+  loadQ();
+}
+
+function startReviewLevel(level){
+  currentLevel=level;
+  currentQuestions=buildReviewQuestions(level.words);
+  currentQIndex=0;
+  sessionCorrect=0;sessionWrong=0;sessionScore=0;
+  isReviewSession=true;
   $('gameTitle').textContent=level.emoji+' '+level.name;
   $('gameInner').classList.remove('hidden');
   $('levelComplete').classList.add('hidden');
@@ -1662,12 +1749,14 @@ function reviewWrong(){
   if(wordMistakes.length===0){showToast('אין שגיאות לחזרה!');return;}
   const pool=wordMistakes.slice(-20).map(w=>({en:w.en,he:w.he}));
   const fakeLevel={id:-2,name:"חזרה על שגיאות",emoji:"📝",words:pool};
-  startLevel(fakeLevel);
+  startReviewLevel(fakeLevel);
 }
 
 function loadQ(){
   isAnswering=false;
   $('feedbackBox').classList.add('hidden');
+  $('typingArea').classList.add('hidden');
+  $('optionsList').classList.remove('hidden');
   if(currentQIndex>=currentQuestions.length){
     showLevelComplete();return;
   }
@@ -1718,6 +1807,52 @@ function loadQ(){
       btn.addEventListener('click',()=>checkQ(word,q,btn));
       grid.appendChild(btn);
     });
+    return;
+  }
+
+  if(q.type==='listening'){
+    $('qTypeBadge').textContent='הקשב ובחר את התרגום';
+    $('wordMain').innerHTML='<div class="listening-visual"><span class="listening-bar"></span><span class="listening-bar"></span><span class="listening-bar"></span><span class="listening-bar"></span><span class="listening-bar"></span></div>';
+    $('wordMain').className='word-main';
+    $('wordHint').textContent='לחץ על 🔊 כדי לשמוע שוב';
+    $('audioBtn').onclick=()=>speak(q.question,'en');
+    speak(q.question,'en');
+    grid.className='options-list';
+    grid.setAttribute('dir','rtl');
+    const allWordsFlat=[];
+    ALL_LEVELS.forEach(l=>l.words.forEach(w=>allWordsFlat.push(w)));
+    let pool=allWordsFlat.map(w=>w.he).filter(v=>v!==q.correct);
+    pool=shuffle(pool).slice(0,3);
+    const opts=shuffle([q.correct,...pool]);
+    opts.forEach(o=>{
+      const btn=document.createElement('button');
+      btn.className='opt-btn';
+      btn.textContent=o;
+      btn.setAttribute('dir','rtl');
+      btn.addEventListener('click',()=>checkQ(o,q,btn));
+      grid.appendChild(btn);
+    });
+    return;
+  }
+
+  if(q.type==='typing'){
+    $('qTypeBadge').textContent='הקלד את התרגום באנגלית';
+    $('wordMain').textContent=q.question;
+    $('wordMain').className='word-main';
+    $('wordMain').setAttribute('dir','rtl');
+    $('wordHint').textContent='';
+    $('audioBtn').onclick=()=>speak(q.correct,'en');
+    grid.classList.add('hidden');
+    const typingArea=$('typingArea');
+    typingArea.classList.remove('hidden');
+    const input=$('typingInput');
+    input.value='';
+    input.className='typing-input';
+    input.disabled=false;
+    setTimeout(()=>input.focus(),250);
+    input.onkeydown=e=>{if(e.key==='Enter')submitTypingAnswer();};
+    $('typingSubmitBtn').disabled=false;
+    currentTypingQuestion=q;
     return;
   }
 
@@ -1808,7 +1943,8 @@ function checkQ(selected,q,btn){
       $('feedbackBox').textContent='נכון! +10 נקודות';
       if(!learnedWords.includes(q.en))learnedWords.push(q.en);
       wrongWords=wrongWords.filter(w=>w.en!==q.en);
-      speak(q.correct,q.type==='en-to-he'?'he':'en');
+      const speakLang=(q.type==='en-to-he'||q.type==='listening')?'he':'en';
+      speak(q.correct,speakLang);
     }
   }else{
     document.querySelectorAll('#optionsList .opt-btn').forEach(b=>{
@@ -1834,11 +1970,88 @@ function checkQ(selected,q,btn){
   setTimeout(loadQ,1600);
 }
 
+function submitTypingAnswer(){
+  if(isAnswering)return;
+  const q=currentTypingQuestion;
+  if(!q)return;
+  const input=$('typingInput');
+  const typed=input.value.trim();
+  if(!typed){input.focus();return;}
+  checkTypingQ(typed,q);
+}
+
+function checkTypingQ(typed,q){
+  if(isAnswering)return;
+  isAnswering=true;
+  totalAnswers++;
+  const correct=typed.trim().toLowerCase()===q.correct.toLowerCase();
+  const input=$('typingInput');
+  $('typingSubmitBtn').disabled=true;
+  input.disabled=true;
+
+  if(correct){
+    score+=12;correctAnswers++;sessionCorrect++;sessionScore+=12;
+    input.classList.add('correct');
+    if(!learnedWords.includes(q.en))learnedWords.push(q.en);
+    wrongWords=wrongWords.filter(w=>w.en!==q.en);
+    speak(q.correct,'en');
+  }else{
+    score=Math.max(0,score-3);sessionWrong++;
+    input.classList.add('wrong');
+    input.value=q.correct;
+    if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:'typing'});
+  }
+
+  if(revealEnabled){
+    saveState();
+    updateBadges();
+    currentQIndex++;
+    const advance=()=>loadQ();
+    setTimeout(()=>{
+      showTypingReveal(q,correct,12,advance);
+    },350);
+    return;
+  }
+
+  $('feedbackBox').className='feedback-box '+(correct?'correct':'wrong');
+  $('feedbackBox').textContent=correct?('נכון! +12 נקודות'):('לא נכון. התשובה: '+q.correct);
+  $('feedbackBox').classList.remove('hidden');
+  saveState();
+  updateBadges();
+  currentQIndex++;
+  setTimeout(loadQ,1700);
+}
+
 function showLevelComplete(){
   $('gameInner').classList.add('hidden');
   $('levelComplete').classList.remove('hidden');
   const pct=sessionCorrect+sessionWrong>0?Math.round((sessionCorrect/(sessionCorrect+sessionWrong))*100):0;
   let emoji='🎉',title='כל הכבוד!',sub='';
+
+  if(isReviewSession){
+    const remaining=wrongWords.filter(w=>w.type!=='sentence').length;
+    if(remaining===0){
+      emoji='🏆';title='תיקנת הכל!';sub='אין יותר שגיאות לחזרה — כל הכבוד!';
+    }else{
+      emoji='💪';title='התקדמות יפה!';sub=`נשארו עוד ${remaining} מילים לתרגל`;
+    }
+    $('lcEmoji').textContent=emoji;
+    $('lcTitle').textContent=title;
+    $('lcSub').textContent=sub;
+    $('lcCorrect').textContent=sessionCorrect;
+    $('lcWrong').textContent=sessionWrong;
+    $('lcScore').textContent='+'+sessionScore;
+    const nextBtn=$('lcNextBtn');
+    if(remaining>0){
+      nextBtn.textContent='המשך לתרגל →';
+      nextBtn.onclick=reviewWrong;
+    }else{
+      nextBtn.textContent='חזור לבית';
+      nextBtn.onclick=goHome;
+    }
+    return;
+  }
+
   if(pct>=90){emoji='🏆';title='מושלם!';sub='ביצועים מדהימים!';}
   else if(pct>=70){emoji='🎉';title='יפה מאוד!';sub='המשך כך!';}
   else{emoji='💪';title='לא רע!';sub='עוד תרגול ויצליח!';}
@@ -2135,6 +2348,44 @@ function closeRevealModal(){
   const cb=revealCloseCallback;
   revealCloseCallback=null;
   if(cb)setTimeout(cb,200);
+}
+
+function showTypingReveal(q,correct,pointsDelta,onClose){
+  const overlay=$('revealOverlay');
+  const stamp=$('revealStamp');
+  const mascot=$('revealMascot');
+  const wordWrap=$('revealWordWrap');
+  const sentenceEl=$('revealSentence');
+  const translationEl=$('revealTranslation');
+  const pointsEl=$('revealPoints');
+  const burst=$('revealBurst');
+
+  sentenceEl.classList.add('hidden');
+  wordWrap.classList.remove('hidden');
+  wordWrap.innerHTML='';
+  wordWrap.setAttribute('dir','ltr');
+
+  stamp.textContent=correct?'מעולה!':'כמעט!';
+  stamp.className='reveal-stamp'+(correct?'':' wrong-stamp');
+  mascot.textContent=(correct?CORRECT_MASCOTS:WRONG_MASCOTS)[Math.floor(Math.random()*(correct?CORRECT_MASCOTS:WRONG_MASCOTS).length)];
+
+  q.correct.split('').forEach((ch,i)=>{
+    const span=document.createElement('span');
+    span.className='reveal-letter'+(correct?' hero-letter':'');
+    span.textContent=ch.toUpperCase();
+    span.style.animationDelay=(i*0.06)+'s';
+    wordWrap.appendChild(span);
+  });
+
+  translationEl.textContent=q.he;
+  pointsEl.textContent=correct?('+'+pointsDelta+' נקודות'):'נסה את הבא!';
+  pointsEl.className='reveal-points'+(correct?'':' wrong-points');
+
+  buildParticles(burst,correct?28:10,correct);
+  overlay.classList.add('show');
+  vibrate(correct?[30,40,60]:[40]);
+
+  revealCloseCallback=onClose;
 }
 
 // ============================================================
