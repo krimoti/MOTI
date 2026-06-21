@@ -374,6 +374,43 @@ body{
 .typing-input.correct{border-color:var(--green);background:var(--green-light);color:#166534;}
 .typing-input.wrong{border-color:var(--red);background:var(--red-light);color:#991b1b;}
 
+/* Pronunciation mode */
+.pronunciation-area{
+  display:flex;flex-direction:column;align-items:center;
+  padding:8px 0 4px;
+}
+.mic-btn{
+  width:84px;height:84px;border-radius:50%;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  border:none;color:#fff;font-size:2.2rem;
+  cursor:pointer;
+  box-shadow:0 8px 24px rgba(102,126,234,0.35);
+  transition:transform 0.15s,box-shadow 0.2s;
+  display:flex;align-items:center;justify-content:center;
+}
+.mic-btn:active{transform:scale(0.94);}
+.mic-btn.listening{
+  background:linear-gradient(135deg,#f5576c,#f093fb);
+  animation:micPulse 1.1s ease-in-out infinite;
+}
+.mic-btn.processing{
+  background:var(--gray-400);
+  cursor:default;
+}
+.mic-btn:disabled{cursor:default;opacity:0.7;}
+@keyframes micPulse{
+  0%,100%{box-shadow:0 8px 24px rgba(245,87,108,0.35),0 0 0 0 rgba(245,87,108,0.4);}
+  50%{box-shadow:0 8px 24px rgba(245,87,108,0.35),0 0 0 14px rgba(245,87,108,0);}
+}
+.mic-status{
+  margin-top:14px;font-size:0.9rem;color:var(--gray-600);
+  text-align:center;font-weight:600;
+}
+.mic-transcript{
+  margin-top:8px;font-size:1rem;font-weight:700;color:var(--purple);
+  direction:ltr;text-align:center;
+}
+
 /* Listening mode visual */
 .listening-visual{
   display:flex;align-items:center;justify-content:center;
@@ -851,8 +888,29 @@ body{
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- ===== ACTIVATION GATE ===== -->
+<div class="screen" id="activationScreen">
+  <div class="onboard-logo">🔐</div>
+  <div class="onboard-title">WordUp</div>
+  <div class="onboard-sub">האפליקציה נעולה — נדרש אישור מכשיר</div>
+  <div class="onboard-card">
+    <div style="background:var(--purple-light);color:var(--purple-dark);border-radius:20px;padding:8px 16px;text-align:center;font-weight:700;font-size:0.95rem;margin-bottom:16px;display:inline-block;width:100%;box-sizing:border-box;">
+      💳 <span id="activationPriceText">25 ₪ לרכישה חד-פעמית</span>
+    </div>
+    <label>שלח את המזהה הזה למנהל לאישור:</label>
+    <div id="deviceIdDisplay" style="background:var(--gray-100);border-radius:var(--radius);padding:14px;font-family:monospace;font-size:1.1rem;font-weight:700;text-align:center;color:var(--purple-dark);letter-spacing:0.05em;direction:ltr;margin-top:8px;">WU-XXXXX-XXXXX</div>
+    <button class="btn-secondary" style="margin-top:10px;" onclick="copyDeviceId()">📋 העתק מזהה</button>
+    <div id="activationError" style="color:var(--red);font-size:0.85rem;margin-top:12px;display:none;"></div>
+    <button class="btn-start" id="activationSubmitBtn" onclick="submitActivation()">בדוק אישור →</button>
+    <div class="onboard-tip">לאחר האישור, המכשיר יזכור — לא תידרש שוב, גם ללא אינטרנט</div>
+
+    <!-- ⚠️ TEMPORARY TEST BUTTON — delete this whole <button> before sending to real users -->
+    <button onclick="localStorage.setItem('wup_activated','1');location.reload();" style="margin-top:18px;width:100%;background:#fff3cd;border:1.5px dashed #d4a017;color:#7a5c00;padding:10px;border-radius:var(--radius);font-size:0.78rem;font-weight:700;cursor:pointer;">🧪 דלג על אקטיבציה (בדיקה בלבד — להסיר לפני שליחה ללקוחות)</button>
+  </div>
+</div>
+
 <!-- ===== ONBOARDING ===== -->
-<div class="screen active" id="onboardingScreen">
+<div class="screen" id="onboardingScreen">
   <div class="onboard-logo">📖</div>
   <div class="onboard-title">WordUp</div>
   <div class="onboard-sub">לומדים אנגלית בדרך המהנה ביותר</div>
@@ -944,6 +1002,13 @@ body{
     <div class="typing-area hidden" id="typingArea">
       <input type="text" id="typingInput" class="typing-input" placeholder="הקלד באנגלית..." dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button class="btn-primary" id="typingSubmitBtn" style="margin-top:10px;" onclick="submitTypingAnswer()">בדוק</button>
+    </div>
+    <div class="pronunciation-area hidden" id="pronunciationArea">
+      <button class="mic-btn" id="micBtn" onclick="startPronunciationCheck()">
+        <span id="micIcon">🎤</span>
+      </button>
+      <div class="mic-status" id="micStatus">לחץ על המיקרופון ואמור את המילה</div>
+      <div class="mic-transcript hidden" id="micTranscript"></div>
     </div>
     <div class="feedback-box correct hidden" id="feedbackBox"></div>
   </div>
@@ -1116,6 +1181,20 @@ body{
       </div>
     </div>
 
+    <!-- pronunciation toggle -->
+    <div class="admin-section">
+      <h3>🎤 תרגול הגייה</h3>
+      <div class="toggle-row">
+        <div class="toggle-row-text">
+          <div class="toggle-row-title">שאלות הגייה בקול</div>
+          <div class="toggle-row-sub">המשתמש מדבר למכשיר, האפליקציה בודקת ועונה בקול. דורש אינטרנט ומיקרופון.</div>
+        </div>
+        <button class="switch" id="pronunciationToggle" onclick="togglePronunciationSetting()">
+          <span class="switch-knob"></span>
+        </button>
+      </div>
+    </div>
+
     <!-- add word -->
     <div class="admin-section">
       <h3>➕ הוסף מילה</h3>
@@ -1123,6 +1202,42 @@ body{
       <input id="adNewHe" class="admin-input" placeholder="תרגום בעברית" dir="rtl">
       <select id="adNewLevel" class="admin-select"></select>
       <button class="btn-primary btn-sm" onclick="adminAddWord()">➕ הוסף למילון</button>
+    </div>
+
+    <!-- bulk excel import -->
+    <div class="admin-section">
+      <h3>📊 ייבוא בנק מילים מאקסל</h3>
+      <div style="font-size:0.8rem;color:var(--gray-600);line-height:1.6;margin-bottom:12px;">
+        קובץ Excel (.xlsx) עם עמודות: <b>English</b> | <b>Hebrew</b> | <b>Category</b><br>
+        מילים עם קטגוריה קיימת ייכנסו לנושא הקיים. קטגוריה חדשה תיצור נושא חדש אוטומטית.
+      </div>
+      <button class="btn-primary btn-sm btn-warning" onclick="document.getElementById('adExcelFile').click()">📊 בחר קובץ Excel</button>
+      <input type="file" id="adExcelFile" accept=".xlsx,.xls" style="display:none" onchange="adminImportExcel(this.files[0])">
+      <div id="excelImportStatus" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- add sentence -->
+    <div class="admin-section">
+      <h3>📝 הוסף משפט להשלמה</h3>
+      <div style="font-size:0.78rem;color:var(--gray-600);line-height:1.5;margin-bottom:10px;">
+        השתמש ב-<b>___</b> (שלושה קווים תחתונים) במקום המילה החסרה
+      </div>
+      <input id="adNewSentenceText" class="admin-input" placeholder="I ___ to school every day." dir="ltr">
+      <input id="adNewSentenceCorrect" class="admin-input" placeholder="המילה הנכונה (go)" dir="ltr">
+      <input id="adNewSentenceHe" class="admin-input" placeholder="תרגום המשפט לעברית" dir="rtl">
+      <button class="btn-primary btn-sm" onclick="adminAddSentence()">➕ הוסף משפט</button>
+    </div>
+
+    <!-- bulk excel import sentences -->
+    <div class="admin-section">
+      <h3>📊 ייבוא משפטים מאקסל</h3>
+      <div style="font-size:0.8rem;color:var(--gray-600);line-height:1.6;margin-bottom:12px;">
+        קובץ Excel (.xlsx) עם עמודות: <b>Sentence</b> (עם ___ במקום המילה) | <b>Answer</b> | <b>Hebrew</b>
+      </div>
+      <button class="btn-primary btn-sm btn-warning" onclick="document.getElementById('adSentenceExcelFile').click()">📊 בחר קובץ Excel</button>
+      <input type="file" id="adSentenceExcelFile" accept=".xlsx,.xls" style="display:none" onchange="adminImportSentenceExcel(this.files[0])">
+      <div id="sentenceExcelImportStatus" style="margin-top:10px;"></div>
+      <button class="btn-secondary btn-sm" style="margin-top:10px;" onclick="downloadSentenceTemplate()">⬇️ הורד תבנית לדוגמה</button>
     </div>
 
     <!-- change password -->
@@ -1142,11 +1257,21 @@ body{
       <input type="file" id="adImportFile" accept=".json" style="display:none" onchange="adminImport(this.files[0])">
     </div>
 
+    <!-- activation lock -->
+    <div class="admin-section">
+      <h3>🔐 הפעלת מכשיר</h3>
+      <div style="font-size:0.8rem;color:var(--gray-600);line-height:1.6;margin-bottom:12px;">
+        המכשיר הזה מאושר. נעילה תדרוש אישור מחדש דרך מזהה המכשיר (ההתקדמות נשמרת).<br><br>
+        <b>הגדרת מערכת האישורים:</b> ראה קובץ <code>wordup_activation_script.gs</code> שצורף — מכיל קוד מוכן ל-Google Apps Script + הוראות פריסה מלאות (כ-5 דקות, חינמי לגמרי, ללא שרת משלך).
+      </div>
+      <button class="btn-primary btn-sm btn-warning" onclick="adminLockDevice()">🔒 נעל את המכשיר הזה</button>
+    </div>
+
     <!-- reset -->
     <div class="admin-section">
       <h3>🗑️ איפוס</h3>
       <button class="btn-primary btn-sm btn-danger" onclick="adminResetProgress()">🔄 איפוס התקדמות משתמש</button>
-      <button class="btn-primary btn-sm btn-danger" style="margin-top:6px;" onclick="adminResetAll()">⚠️ איפוס מלא (כולל מילים)</button>
+      <button class="btn-primary btn-sm btn-danger" style="margin-top:6px;" onclick="adminResetAll()">⚠️ איפוס מלא (כולל מילים והפעלה)</button>
     </div>
     <div style="height:24px;"></div>
   </div>
@@ -1167,7 +1292,8 @@ body{
   </div>
 </div>
 
-
+<!-- SheetJS for client-side Excel (.xlsx) parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 // ============================================================
@@ -1387,6 +1513,7 @@ const SENTENCES=[
 {text:"He ___ his bike to work.",correct:"rides",he:"הוא רוכב על האופניים שלו לעבודה"},
 {text:"We ___ the river by boat.",correct:"crossed",he:"חצינו את הנהר בסירה"}
 ];
+const BUILTIN_SENTENCE_COUNT=SENTENCES.length; // marks where admin-added sentences begin
 
 // ============================================================
 // LETTER PUZZLES – השלמת אות חסרה במילה
@@ -1407,6 +1534,7 @@ let correctAnswers = parseInt(localStorage.getItem('wup_correct')) || 0;
 let streak = parseInt(localStorage.getItem('wup_streak')) || 0;
 let lastPlayDate = localStorage.getItem('wup_lastdate') || '';
 let revealEnabled = localStorage.getItem('wup_reveal_enabled')!=='off'; // default ON
+let pronunciationEnabled = localStorage.getItem('wup_pronunciation_enabled')!=='off'; // default ON
 
 // Game state
 let currentLevel = null;
@@ -1414,7 +1542,9 @@ let currentQuestions = [];
 let currentQIndex = 0;
 let isAnswering = false;
 let currentTypingQuestion = null;
+let currentPronunciationQuestion = null;
 let isReviewSession = false;
+let nextCustomLevelId = 1000;
 let sessionCorrect = 0;
 let sessionWrong = 0;
 let sessionScore = 0;
@@ -1440,6 +1570,150 @@ function speak(text,lang){
   u.lang=lang==='he'?'he-IL':'en-US';
   u.rate=text.length>15?0.8:0.9;
   window.speechSynthesis.speak(u);
+}
+
+// ============================================================
+// PRONUNCIATION CHECK — speech recognition + spoken feedback
+// ============================================================
+function isSpeechRecognitionSupported(){
+  return !!(window.SpeechRecognition||window.webkitSpeechRecognition);
+}
+
+function normalizeForCompare(text){
+  return text.toLowerCase().trim().replace(/[.,!?;:'"]/g,'').replace(/\s+/g,' ');
+}
+
+const PRONUNCIATION_PRAISE=['Nice!','Correct!','Great!','Well done!','Perfect!','Excellent!'];
+
+function speakEnglishFeedback(text,onEnd){
+  if(!('speechSynthesis' in window)){if(onEnd)onEnd();return;}
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='en-US';
+  u.rate=0.95;
+  if(onEnd)u.onend=onEnd;
+  window.speechSynthesis.speak(u);
+}
+
+function startPronunciationCheck(){
+  if(!isSpeechRecognitionSupported()){
+    showToast('הדפדפן הזה לא תומך בזיהוי קולי');
+    return;
+  }
+  const q=currentPronunciationQuestion;
+  if(!q||isAnswering)return;
+
+  const SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const recognition=new SpeechRecognitionCtor();
+  recognition.lang='en-US';
+  recognition.continuous=false;
+  recognition.interimResults=false;
+  recognition.maxAlternatives=3;
+
+  const micBtn=$('micBtn');
+  const micIcon=$('micIcon');
+  micBtn.className='mic-btn listening';
+  micIcon.textContent='⏺️';
+  micBtn.disabled=true;
+  $('micStatus').textContent='מקשיב...';
+  $('micTranscript').classList.add('hidden');
+
+  let finished=false;
+  const safetyTimeout=setTimeout(()=>{
+    if(!finished){finished=true;try{recognition.stop();}catch(e){}}
+  },8000);
+
+  recognition.onresult=(event)=>{
+    finished=true;
+    clearTimeout(safetyTimeout);
+    const alternatives=[];
+    for(let i=0;i<event.results[0].length;i++){
+      alternatives.push(event.results[0][i].transcript);
+    }
+    handlePronunciationResult(alternatives,q);
+  };
+
+  recognition.onerror=(event)=>{
+    finished=true;
+    clearTimeout(safetyTimeout);
+    micBtn.className='mic-btn';
+    micIcon.textContent='🎤';
+    micBtn.disabled=false;
+    if(event.error==='not-allowed'||event.error==='service-not-allowed'){
+      $('micStatus').textContent='הגישה למיקרופון נחסמה — אפשר גישה בהגדרות הדפדפן';
+    }else if(event.error==='no-speech'){
+      $('micStatus').textContent='לא נשמע דיבור — נסה שוב';
+    }else{
+      $('micStatus').textContent='שגיאה בזיהוי — נסה שוב';
+    }
+  };
+
+  recognition.onend=()=>{
+    if(!finished){
+      finished=true;
+      clearTimeout(safetyTimeout);
+      micBtn.className='mic-btn';
+      micIcon.textContent='🎤';
+      micBtn.disabled=false;
+    }
+  };
+
+  try{
+    recognition.start();
+  }catch(err){
+    micBtn.className='mic-btn';
+    micIcon.textContent='🎤';
+    micBtn.disabled=false;
+    $('micStatus').textContent='לא ניתן להפעיל מיקרופון — נסה שוב';
+  }
+}
+
+function handlePronunciationResult(alternatives,q){
+  const micBtn=$('micBtn');
+  const micIcon=$('micIcon');
+  micBtn.className='mic-btn processing';
+  micIcon.textContent='⏳';
+  $('micStatus').textContent='בודק...';
+
+  const target=normalizeForCompare(q.target);
+  const said=alternatives.map(normalizeForCompare);
+  const correct=said.some(s=>s===target||s.includes(target)||target.includes(s)&&s.length>2);
+
+  $('micTranscript').textContent='"'+alternatives[0]+'"';
+  $('micTranscript').classList.remove('hidden');
+
+  checkPronunciationQ(correct,q,alternatives[0]);
+}
+
+function checkPronunciationQ(correct,q,heard){
+  if(isAnswering)return;
+  isAnswering=true;
+  totalAnswers++;
+  const micBtn=$('micBtn');
+  const micIcon=$('micIcon');
+
+  if(correct){
+    score+=12;correctAnswers++;sessionCorrect++;sessionScore+=12;
+    if(q.mode==='word'&&!learnedWords.includes(q.en))learnedWords.push(q.en);
+    wrongWords=wrongWords.filter(w=>w.en!==q.en);
+    micIcon.textContent='✅';
+    micBtn.className='mic-btn';
+    $('micStatus').textContent='מעולה!';
+    const praise=PRONUNCIATION_PRAISE[Math.floor(Math.random()*PRONUNCIATION_PRAISE.length)];
+    speakEnglishFeedback(praise);
+  }else{
+    score=Math.max(0,score-3);sessionWrong++;
+    if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:q.mode==='sentence'?'sentence':'pronunciation'});
+    micIcon.textContent='❌';
+    micBtn.className='mic-btn';
+    $('micStatus').textContent='לא מדויק — האזן להגייה הנכונה';
+    speakEnglishFeedback('This is not correct. You should say: '+q.target);
+  }
+
+  saveState();
+  updateBadges();
+  currentQIndex++;
+  setTimeout(loadQ,2200);
 }
 
 let toastTimer=null;
@@ -1598,10 +1872,11 @@ function renderHome(filter=''){
   const grid=$('catGrid');
   grid.innerHTML='';
   ALL_LEVELS.forEach(lvl=>{
+    if(lvl.words.length===0)return; // skip empty levels (e.g. failed/partial imports)
     if(filter&&!lvl.name.includes(filter)&&!lvl.emoji.includes(filter))return;
     const locked=score<lvl.minScore;
     const learnedInLevel=lvl.words.filter(w=>learnedWords.includes(w.en)).length;
-    const pct=Math.round((learnedInLevel/lvl.words.length)*100);
+    const pct=lvl.words.length>0?Math.round((learnedInLevel/lvl.words.length)*100):0;
     const card=document.createElement('div');
     card.className='cat-card'+(locked?' locked':'');
     card.innerHTML=`
@@ -1665,6 +1940,16 @@ function buildTypingQuestion(word){
   return {type:'typing',question:word.he,correct:word.en,en:word.en,he:word.he};
 }
 
+function buildPronunciationWordQuestion(word){
+  return {type:'pronunciation',mode:'word',target:word.en,he:word.he,en:word.en};
+}
+
+function buildPronunciationSentenceQuestion(){
+  const s=SENTENCES[Math.floor(Math.random()*SENTENCES.length)];
+  const fullSentence=s.text.replace('___',s.correct);
+  return {type:'pronunciation',mode:'sentence',target:fullSentence,he:s.he,en:fullSentence};
+}
+
 function buildReviewQuestions(words){
   // Dedicated builder for "review mistakes" — only question types tied to the
   // exact words the user got wrong. No random sentence-bank injection.
@@ -1705,6 +1990,14 @@ function buildQuestions(words){
   typingEligible.slice(0,Math.max(1,Math.floor(words.length/5))).forEach(w=>{
     qs.push(buildTypingQuestion(w));
   });
+  // sprinkle in pronunciation questions (speak it aloud) — only if supported & enabled
+  if(isSpeechRecognitionSupported()&&pronunciationEnabled){
+    const pronWordPool=shuffle([...words]).slice(0,Math.max(1,Math.floor(words.length/5)));
+    pronWordPool.forEach(w=>qs.push(buildPronunciationWordQuestion(w)));
+    if(words.length>=6&&Math.random()<0.5){
+      qs.push(buildPronunciationSentenceQuestion());
+    }
+  }
   return shuffle(qs);
 }
 
@@ -1756,6 +2049,7 @@ function loadQ(){
   isAnswering=false;
   $('feedbackBox').classList.add('hidden');
   $('typingArea').classList.add('hidden');
+  $('pronunciationArea').classList.add('hidden');
   $('optionsList').classList.remove('hidden');
   if(currentQIndex>=currentQuestions.length){
     showLevelComplete();return;
@@ -1853,6 +2147,29 @@ function loadQ(){
     input.onkeydown=e=>{if(e.key==='Enter')submitTypingAnswer();};
     $('typingSubmitBtn').disabled=false;
     currentTypingQuestion=q;
+    return;
+  }
+
+  if(q.type==='pronunciation'){
+    $('qTypeBadge').textContent=q.mode==='sentence'?'הגה את המשפט בקול':'הגה את המילה בקול';
+    $('wordMain').textContent=q.target;
+    $('wordMain').className='word-main'+(q.target.length>20?' large-word':'');
+    $('wordMain').setAttribute('dir','ltr');
+    $('wordHint').textContent=q.he;
+    $('audioBtn').onclick=()=>speak(q.target,'en');
+    speak(q.target,'en');
+    grid.classList.add('hidden');
+    const pronArea=$('pronunciationArea');
+    pronArea.classList.remove('hidden');
+    const micBtn=$('micBtn');
+    const micIcon=$('micIcon');
+    micBtn.className='mic-btn';
+    micBtn.disabled=false;
+    micIcon.textContent='🎤';
+    $('micStatus').textContent='לחץ על המיקרופון ואמור בקול';
+    $('micTranscript').classList.add('hidden');
+    $('micTranscript').textContent='';
+    currentPronunciationQuestion=q;
     return;
   }
 
@@ -2434,19 +2751,102 @@ function closeInstallInstructions(){
 }
 
 // ============================================================
+// ACTIVATION GATE — device approval via Google Apps Script
+// (no server of your own — runs free under your Google account)
+// ============================================================
+// PASTE YOUR DEPLOYED APPS SCRIPT WEB APP URL HERE:
+const ACTIVATION_API_URL='PASTE_YOUR_APPS_SCRIPT_URL_HERE';
+// Price shown to the user on the activation screen — change anytime:
+const ACTIVATION_PRICE_TEXT='25 ₪ לרכישה חד-פעמית';
+
+function isActivated(){
+  return localStorage.getItem('wup_activated')==='1';
+}
+
+function getOrCreateDeviceId(){
+  let id=localStorage.getItem('wup_device_id');
+  if(!id){
+    id='WU-'+Math.random().toString(36).slice(2,7).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    localStorage.setItem('wup_device_id',id);
+  }
+  return id;
+}
+
+function renderActivationScreen(){
+  const id=getOrCreateDeviceId();
+  $('deviceIdDisplay').textContent=id;
+  const priceEl=$('activationPriceText');
+  if(priceEl)priceEl.textContent=ACTIVATION_PRICE_TEXT;
+}
+
+function copyDeviceId(){
+  const id=getOrCreateDeviceId();
+  navigator.clipboard?.writeText(id).then(()=>{
+    showToast('המזהה הועתק!');
+  }).catch(()=>{
+    showToast('לא ניתן להעתיק אוטומטית — העתק ידנית');
+  });
+}
+
+async function submitActivation(){
+  const btn=$('activationSubmitBtn');
+  const id=getOrCreateDeviceId();
+  $('activationError').style.display='none';
+
+  if(!ACTIVATION_API_URL||ACTIVATION_API_URL==='PASTE_YOUR_APPS_SCRIPT_URL_HERE'){
+    $('activationError').textContent='לא הוגדר שרת אישור (ACTIVATION_API_URL) בקוד';
+    $('activationError').style.display='block';
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent='בודק...';
+
+  try{
+    const res=await fetch(`${ACTIVATION_API_URL}?deviceId=${encodeURIComponent(id)}`);
+    const data=await res.json();
+    if(data.approved){
+      localStorage.setItem('wup_activated','1');
+      proceedPastActivation();
+    }else{
+      $('activationError').textContent='המכשיר עדיין לא אושר. ודא ששלחת את המזהה ושהוא אושר.';
+      $('activationError').style.display='block';
+    }
+  }catch(err){
+    $('activationError').textContent='לא ניתן להתחבר לשרת האישור. ודא שיש חיבור לאינטרנט ונסה שוב.';
+    $('activationError').style.display='block';
+  }finally{
+    btn.disabled=false;
+    btn.textContent='בדוק אישור →';
+  }
+}
+
+function proceedPastActivation(){
+  showScreen('onboardingScreen');
+  if(userName){
+    enterHome();
+  }
+}
+
+// ============================================================
 // INIT
 // ============================================================
 loadCustomWords(); // merge admin-added words BEFORE first render
+loadCustomSentences(); // merge admin-added sentences BEFORE first render
 
-if(userName){
+if(!isActivated()){
+  renderActivationScreen();
+  showScreen('activationScreen');
+}else if(userName){
   updateStreak();
   buildGreeting();
   renderHome();
   updateBadges();
   showScreen('homeScreen');
   maybeShowInstallBanner();
+}else{
+  showScreen('onboardingScreen');
 }
-// else stays on onboarding
 
 setTimeout(hideSplash,1450);
 
@@ -2513,6 +2913,11 @@ function openAdminScreen(){
   // reflect reveal toggle state
   const t=$('revealToggle');
   if(revealEnabled)t.classList.add('on');else t.classList.remove('on');
+  // reflect pronunciation toggle state
+  const pt=$('pronunciationToggle');
+  if(pt){
+    if(pronunciationEnabled)pt.classList.add('on');else pt.classList.remove('on');
+  }
   showScreen('adminScreen');
 }
 
@@ -2522,6 +2927,14 @@ function toggleRevealSetting(){
   const t=$('revealToggle');
   if(revealEnabled)t.classList.add('on');else t.classList.remove('on');
   showToast(revealEnabled?'אנימציית ההשלמה הופעלה':'אנימציית ההשלמה כובתה');
+}
+
+function togglePronunciationSetting(){
+  pronunciationEnabled=!pronunciationEnabled;
+  localStorage.setItem('wup_pronunciation_enabled',pronunciationEnabled?'on':'off');
+  const pt=$('pronunciationToggle');
+  if(pronunciationEnabled)pt.classList.add('on');else pt.classList.remove('on');
+  showToast(pronunciationEnabled?'תרגול הגייה הופעל':'תרגול הגייה כובה');
 }
 
 function adminAddWord(){
@@ -2539,13 +2952,232 @@ function adminAddWord(){
   openAdminScreen();
 }
 
+// ============================================================
+// EXCEL BULK IMPORT — English/Hebrew/Category columns
+// ============================================================
+const CATEGORY_EMOJIS=['📘','📗','📙','📕','🗂️','🎯','💡','🔖','📌','🏷️','🧩','🎨','🌟','🔥','💎','🚩','🎁','🧭','🔮','🏆'];
+
+function findOrCreateLevelByCategory(categoryName){
+  const trimmed=(categoryName||'').trim();
+  const fallbackName=trimmed||'מילים מיובאות';
+  // try to match an existing level by name (case/whitespace-insensitive)
+  let lvl=ALL_LEVELS.find(l=>l.name.trim().toLowerCase()===fallbackName.toLowerCase());
+  if(lvl)return lvl;
+  // no match — create a new level, unlocked immediately (admin-curated content)
+  while(ALL_LEVELS.find(l=>l.id===nextCustomLevelId))nextCustomLevelId++;
+  const emoji=CATEGORY_EMOJIS[ALL_LEVELS.length%CATEGORY_EMOJIS.length];
+  lvl={id:nextCustomLevelId,name:fallbackName,emoji,minScore:0,words:[]};
+  ALL_LEVELS.push(lvl);
+  nextCustomLevelId++;
+  return lvl;
+}
+
+function adminImportExcel(file){
+  if(!file)return;
+  const statusEl=$('excelImportStatus');
+  statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--gray-600);">⏳ קורא את הקובץ...</div>';
+
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+
+      if(!rows.length){
+        statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--red);">❌ הקובץ ריק</div>';
+        return;
+      }
+
+      // flexibly detect column names (case-insensitive, handles common variants)
+      const sampleKeys=Object.keys(rows[0]);
+      const findKey=(...candidates)=>sampleKeys.find(k=>candidates.includes(k.trim().toLowerCase()));
+      const enKey=findKey('english','en','אנגלית','word');
+      const heKey=findKey('hebrew','he','עברית','translation','תרגום');
+      const catKey=findKey('category','קטגוריה','topic','נושא');
+
+      if(!enKey||!heKey){
+        statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--red);">❌ לא נמצאו עמודות English/Hebrew בקובץ. ודא שיש כותרות עמודה תקינות.</div>';
+        return;
+      }
+
+      let added=0,skipped=0,newCategories=new Set(),usedCategories=new Set();
+
+      rows.forEach(row=>{
+        const en=String(row[enKey]||'').trim();
+        const he=String(row[heKey]||'').trim();
+        const cat=catKey?String(row[catKey]||'').trim():'';
+        if(!en||!he)return; // skip incomplete rows
+
+        const existedBefore=cat?ALL_LEVELS.some(l=>l.name.trim().toLowerCase()===cat.toLowerCase()):false;
+        const lvl=findOrCreateLevelByCategory(cat);
+        if(cat){
+          usedCategories.add(lvl.name);
+          if(!existedBefore)newCategories.add(lvl.name);
+        }
+
+        if(lvl.words.some(w=>w.en.toLowerCase()===en.toLowerCase())){
+          skipped++;
+          return;
+        }
+        lvl.words.push({en,he});
+        added++;
+      });
+
+      saveCustomWords();
+      renderHome();
+      updateBadges();
+
+      let html=`<div style="font-size:0.82rem;color:var(--green);font-weight:700;">✅ יובאו ${added} מילים`;
+      if(skipped>0)html+=` (${skipped} כפילויות דולגו)`;
+      html+=`</div>`;
+      if(newCategories.size>0){
+        html+=`<div style="font-size:0.78rem;color:var(--gray-600);margin-top:4px;">נושאים חדשים שנוצרו: ${[...newCategories].join(', ')}</div>`;
+      }
+      statusEl.innerHTML=html;
+      showToast(`✅ יובאו ${added} מילים בהצלחה!`);
+      openAdminScreen();
+    }catch(err){
+      statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--red);">❌ שגיאה בקריאת הקובץ. ודא שזהו קובץ Excel תקין.</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// SENTENCE MANAGEMENT — add one / bulk Excel import
+// ============================================================
+function adminAddSentence(){
+  const text=$('adNewSentenceText').value.trim();
+  const correct=$('adNewSentenceCorrect').value.trim();
+  const he=$('adNewSentenceHe').value.trim();
+
+  if(!text||!correct||!he){showToast('❌ מלא את כל השדות');return;}
+  if(!text.includes('___')){showToast('❌ המשפט חייב להכיל ___ במקום המילה החסרה');return;}
+  if(SENTENCES.some(s=>s.text.toLowerCase()===text.toLowerCase())){showToast('⚠️ המשפט הזה כבר קיים');return;}
+
+  SENTENCES.push({text,correct,he});
+  saveCustomSentences();
+  $('adNewSentenceText').value='';
+  $('adNewSentenceCorrect').value='';
+  $('adNewSentenceHe').value='';
+  showToast('✅ המשפט נוסף!');
+}
+
+function adminImportSentenceExcel(file){
+  if(!file)return;
+  const statusEl=$('sentenceExcelImportStatus');
+  statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--gray-600);">⏳ קורא את הקובץ...</div>';
+
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+
+      if(!rows.length){
+        statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--red);">❌ הקובץ ריק</div>';
+        return;
+      }
+
+      const sampleKeys=Object.keys(rows[0]);
+      const findKey=(...candidates)=>sampleKeys.find(k=>candidates.includes(k.trim().toLowerCase()));
+      const sentenceKey=findKey('sentence','text','משפט');
+      const answerKey=findKey('answer','correct','תשובה','מילה');
+      const heKey=findKey('hebrew','he','עברית','translation','תרגום');
+
+      if(!sentenceKey||!answerKey||!heKey){
+        statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--red);">❌ לא נמצאו עמודות Sentence/Answer/Hebrew בקובץ.</div>';
+        return;
+      }
+
+      let added=0,skipped=0,invalid=0;
+
+      rows.forEach(row=>{
+        const text=String(row[sentenceKey]||'').trim();
+        const correct=String(row[answerKey]||'').trim();
+        const he=String(row[heKey]||'').trim();
+        if(!text||!correct||!he)return;
+        if(!text.includes('___')){invalid++;return;}
+        if(SENTENCES.some(s=>s.text.toLowerCase()===text.toLowerCase())){skipped++;return;}
+        SENTENCES.push({text,correct,he});
+        added++;
+      });
+
+      saveCustomSentences();
+
+      let html=`<div style="font-size:0.82rem;color:var(--green);font-weight:700;">✅ יובאו ${added} משפטים`;
+      if(skipped>0)html+=` (${skipped} כפילויות דולגו)`;
+      if(invalid>0)html+=` (${invalid} ללא ___ דולגו)`;
+      html+='</div>';
+      statusEl.innerHTML=html;
+      showToast(`✅ יובאו ${added} משפטים בהצלחה!`);
+    }catch(err){
+      statusEl.innerHTML='<div style="font-size:0.82rem;color:var(--red);">❌ שגיאה בקריאת הקובץ. ודא שזהו קובץ Excel תקין.</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function downloadSentenceTemplate(){
+  const sample=[
+    {Sentence:'I ___ to school every day.',Answer:'go',Hebrew:'אני הולך לבית הספר כל יום'},
+    {Sentence:'She ___ a beautiful dress.',Answer:'wears',Hebrew:'היא לובשת שמלה יפה'},
+    {Sentence:'They ___ football on weekends.',Answer:'play',Hebrew:'הם משחקים כדורגל בסופי שבוע'}
+  ];
+  const ws=XLSX.utils.json_to_sheet(sample);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Sentences');
+  XLSX.writeFile(wb,'sentence_template.xlsx');
+}
+
+function saveCustomSentences(){
+  // persist only sentences beyond the original 51 built-in ones
+  const customOnes=SENTENCES.slice(BUILTIN_SENTENCE_COUNT);
+  localStorage.setItem('wup_custom_sentences',JSON.stringify(customOnes));
+}
+
+function loadCustomSentences(){
+  const raw=localStorage.getItem('wup_custom_sentences');
+  if(!raw)return;
+  try{
+    const customOnes=JSON.parse(raw);
+    customOnes.forEach(s=>{
+      if(!SENTENCES.some(existing=>existing.text.toLowerCase()===s.text.toLowerCase())){
+        SENTENCES.push(s);
+      }
+    });
+  }catch(e){}
+}
+
 function saveCustomWords(){
   const extra={};
   ALL_LEVELS.forEach(l=>{extra[l.id]=l.words;});
   localStorage.setItem('wup_custom_words',JSON.stringify(extra));
+  // also persist any levels that were created at runtime (id >= 1000 = custom)
+  const customLevels=ALL_LEVELS.filter(l=>l.id>=1000).map(l=>({id:l.id,name:l.name,emoji:l.emoji,minScore:l.minScore}));
+  localStorage.setItem('wup_custom_levels',JSON.stringify(customLevels));
 }
 
 function loadCustomWords(){
+  // first, restore any custom levels created at runtime (must happen before word merge)
+  const rawLevels=localStorage.getItem('wup_custom_levels');
+  if(rawLevels){
+    try{
+      const customLevels=JSON.parse(rawLevels);
+      customLevels.forEach(cl=>{
+        if(!ALL_LEVELS.find(l=>l.id===cl.id)){
+          ALL_LEVELS.push({id:cl.id,name:cl.name,emoji:cl.emoji,minScore:cl.minScore,words:[]});
+        }
+      });
+    }catch(e){}
+  }
+  // keep the custom-level ID counter ahead of anything already loaded
+  const maxCustomId=Math.max(999,...ALL_LEVELS.filter(l=>l.id>=1000).map(l=>l.id));
+  if(maxCustomId+1>nextCustomLevelId)nextCustomLevelId=maxCustomId+1;
   const raw=localStorage.getItem('wup_custom_words');
   if(!raw)return;
   try{
@@ -2616,8 +3248,14 @@ function adminResetProgress(){
 }
 
 function adminResetAll(){
-  if(!confirm('⚠️ זה יאפס הכל כולל מילים מותאמות אישית. בטוח?'))return;
+  if(!confirm('⚠️ זה יאפס הכל כולל מילים מותאמות אישית והפעלת המכשיר. בטוח?'))return;
   localStorage.clear();location.reload();
+}
+
+function adminLockDevice(){
+  if(!confirm('🔒 זה ינעל את האפליקציה במכשיר הזה — תידרש סיסמת הפעלה כדי להמשיך. ההתקדמות לא תימחק. בטוח?'))return;
+  localStorage.removeItem('wup_activated');
+  location.reload();
 }
 
 console.log('📖 WordUp loaded! Words:',ALL_LEVELS.reduce((a,l)=>a+l.words.length,0));
