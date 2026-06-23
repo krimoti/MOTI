@@ -1362,6 +1362,24 @@ body{
       <button class="btn-primary btn-sm btn-warning" onclick="adminLockDevice()">🔒 נעל את המכשיר הזה</button>
     </div>
 
+    <!-- update instructions -->
+    <div class="admin-section">
+      <h3>🚀 הוראות פרסום עדכון</h3>
+      <div style="font-size:0.82rem;color:var(--gray-600);line-height:1.8;margin-bottom:14px;">
+        גרסה נוכחית: <b id="adminVersionDisplay" style="color:var(--purple);">—</b>
+      </div>
+      <div style="background:var(--gray-50);border-radius:var(--radius-sm);padding:14px;font-size:0.8rem;color:var(--gray-700);line-height:1.9;border:1px solid var(--gray-200);">
+        <b>כשתוסיף תוכן או פיצ'ר חדש:</b><br>
+        1️⃣ פתח את הקובץ בעורך טקסט (Notepad, VS Code וכו')<br>
+        2️⃣ חפש <code style="background:#eee;padding:1px 5px;border-radius:4px;">const APP_VERSION=</code><br>
+        3️⃣ שנה את המספר — למשל מ-<code style="background:#eee;padding:1px 5px;border-radius:4px;">'1.0.0'</code> ל-<code style="background:#eee;padding:1px 5px;border-radius:4px;">'1.1.0'</code><br>
+        4️⃣ שמור ועלה ל-GitHub (commit + push)<br>
+        5️⃣ המשתמשים יראו אוטומטית בנר ירוק "עדכון זמין" בביקור הבא
+      </div>
+      <button class="btn-primary btn-sm" style="margin-top:10px;" onclick="openContentGuide()">📖 מדריך הוספת תוכן לקובץ</button>
+      <button class="btn-secondary btn-sm" style="margin-top:8px;" onclick="adminSimulateUpdate()">🧪 הדגם בנר עדכון (לבדיקה)</button>
+    </div>
+
     <!-- reset -->
     <div class="admin-section">
       <h3>🗑️ איפוס</h3>
@@ -1400,6 +1418,77 @@ body{
       <div class="surprise-desc" id="surpriseDesc"></div>
       <button class="reveal-continue-btn" id="surpriseContinueBtn" onclick="closeSurpriseBox()">מעולה! המשך</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== CONTENT GUIDE MODAL ===== -->
+<div class="modal-overlay hidden" id="contentGuideModal">
+  <div class="modal-box" style="max-width:420px;max-height:85vh;overflow-y:auto;">
+    <div class="modal-title">📖 מדריך הוספת תוכן לקובץ</div>
+    <div class="modal-sub">בלי לדעת לתכנת — צעד אחר צעד</div>
+
+    <div style="background:var(--purple-light);border-radius:var(--radius-sm);padding:12px;margin:14px 0;font-size:0.82rem;color:var(--purple-dark);line-height:1.6;">
+      <b>כלי עריכה מומלץ:</b> Notepad++ (חינמי) או VS Code (חינמי).<br>
+      שניהם מאפשרים Ctrl+F לחיפוש בתוך הקובץ.
+    </div>
+
+    <!-- TAB BUTTONS -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;">
+      <button class="diff-btn selected" id="guideTab1" onclick="switchGuideTab(1)" style="flex:1;font-size:0.75rem;">מילים</button>
+      <button class="diff-btn" id="guideTab2" onclick="switchGuideTab(2)" style="flex:1;font-size:0.75rem;">נושא חדש</button>
+      <button class="diff-btn" id="guideTab3" onclick="switchGuideTab(3)" style="flex:1;font-size:0.75rem;">משפטים</button>
+    </div>
+
+    <!-- TAB 1: הוספת מילים לנושא קיים -->
+    <div id="guideContent1">
+      <div style="font-weight:700;font-size:0.9rem;margin-bottom:8px;color:var(--gray-800);">הוספת מילים לנושא קיים</div>
+      <div style="font-size:0.82rem;color:var(--gray-700);line-height:1.8;">
+        <b>שלב 1</b> — פתח את הקובץ בעורך טקסט<br>
+        <b>שלב 2</b> — לחץ Ctrl+F וחפש את שם הנושא שאתה רוצה, למשל:<br>
+        <code style="display:block;background:#1e1b3a;color:#FFD93D;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;">name:"אוכל ושתייה"</code>
+        <b>שלב 3</b> — תמצא שורה כזו:<br>
+        <code style="display:block;background:#1e1b3a;color:#4ade80;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;">{en:"Bread",he:"לחם"},{en:"Milk",he:"חלב"}</code>
+        <b>שלב 4</b> — הוסף מילים חדשות באותה תבנית, אחרי הפסיק האחרון:<br>
+        <code style="display:block;background:#1e1b3a;color:#4ade80;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;">{en:"Bread",he:"לחם"},{en:"Milk",he:"חלב"},<span style="color:#FFD93D;">{en:"Butter",he:"חמאה"},{en:"Cream",he:"שמנת"}</span></code>
+        <b>שלב 5</b> — שמור, שנה APP_VERSION, העלה ל-GitHub ✅
+      </div>
+    </div>
+
+    <!-- TAB 2: נושא חדש לגמרי -->
+    <div id="guideContent2" style="display:none;">
+      <div style="font-weight:700;font-size:0.9rem;margin-bottom:8px;color:var(--gray-800);">הוספת נושא חדש לגמרי</div>
+      <div style="font-size:0.82rem;color:var(--gray-700);line-height:1.8;">
+        <b>שלב 1</b> — חפש בקובץ:<br>
+        <code style="display:block;background:#1e1b3a;color:#FFD93D;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;">// Additional 20 levels</code>
+        <b>שלב 2</b> — תראה שם רשימה של נושאים שמתחילים ב-<code style="background:#eee;padding:1px 4px;border-radius:3px;">{id:31,</code><br>
+        <b>שלב 3</b> — גלול לסוף הרשימה (נושא האחרון, id:50) ואחריו, לפני <code style="background:#eee;padding:1px 4px;border-radius:3px;">]);</code> הוסף את הנושא החדש בתבנית הזו:<br>
+        <code style="display:block;background:#1e1b3a;color:#4ade80;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;white-space:pre;">,{id:51,name:"שם הנושא",emoji:"🎯",minScore:0,words:[
+{en:"Word",he:"מילה"},{en:"Cat",he:"חתול"}
+]}</code>
+        <div style="background:var(--amber-light);border-radius:6px;padding:8px 10px;font-size:0.78rem;color:#854d0e;margin-top:6px;">
+          ⚠️ <b>חשוב:</b> minScore:0 = פתוח לכולם מיד. minScore:100 = נעול עד שצוברים 100 נקודות.
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: הוספת משפטים -->
+    <div id="guideContent3" style="display:none;">
+      <div style="font-weight:700;font-size:0.9rem;margin-bottom:8px;color:var(--gray-800);">הוספת משפטים להשלמה</div>
+      <div style="font-size:0.82rem;color:var(--gray-700);line-height:1.8;">
+        <b>שלב 1</b> — חפש בקובץ:<br>
+        <code style="display:block;background:#1e1b3a;color:#FFD93D;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;">const BUILTIN_SENTENCE_COUNT</code>
+        <b>שלב 2</b> — גלול קצת <b>למעלה</b> עד שתראה את השורה האחרונה של המשפטים:<br>
+        <code style="display:block;background:#1e1b3a;color:#4ade80;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;">{text:"We ___ the river by boat.",correct:"crossed",he:"..."}</code>
+        <b>שלב 3</b> — הוסף משפטים חדשים <b>לפני</b> השורה עם BUILTIN_SENTENCE_COUNT:<br>
+        <code style="display:block;background:#1e1b3a;color:#FFD93D;padding:8px 10px;border-radius:6px;margin:6px 0;font-size:0.78rem;direction:ltr;white-space:pre;">,{text:"I ___ to the store.",correct:"went",he:"הלכתי לחנות"}
+,{text:"She ___ very happy.",correct:"was",he:"היא הייתה מאוד שמחה"}</code>
+        <div style="background:var(--green-light);border-radius:6px;padding:8px 10px;font-size:0.78rem;color:#166534;margin-top:6px;">
+          💡 <b>טיפ:</b> ___ זה שלושה קווים תחתונים רצופים — המקום של המילה החסרה.
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" style="margin-top:18px;" onclick="closeContentGuide()">הבנתי!</button>
   </div>
 </div>
 
@@ -1634,7 +1723,7 @@ const LETTER_BANK_SIZE=4;
 // ============================================================
 // VERSION — שנה את המספר בכל עדכון שאתה מפרסם
 // ============================================================
-const APP_VERSION='6.0.0';
+const APP_VERSION='1.0.0';
 
 // ============================================================
 // STATE
@@ -3209,7 +3298,34 @@ function openAdminScreen(){
   if(pt){
     if(pronunciationEnabled)pt.classList.add('on');else pt.classList.remove('on');
   }
+  // show current version
+  const vd=$('adminVersionDisplay');
+  if(vd)vd.textContent=APP_VERSION;
   showScreen('adminScreen');
+}
+
+function adminSimulateUpdate(){
+  // simulate a "previous version" so the banner shows up for testing
+  localStorage.setItem('wup_last_version','0.0.0');
+  goHome();
+  setTimeout(()=>checkForUpdate(),300);
+  showToast('בנר עדכון מופעל — ראה את מסך הבית');
+}
+
+function openContentGuide(){
+  $('contentGuideModal').classList.remove('hidden');
+  switchGuideTab(1);
+}
+
+function closeContentGuide(){
+  $('contentGuideModal').classList.add('hidden');
+}
+
+function switchGuideTab(n){
+  [1,2,3].forEach(i=>{
+    $('guideContent'+i).style.display=i===n?'block':'none';
+    $('guideTab'+i).classList.toggle('selected',i===n);
+  });
 }
 
 function toggleRevealSetting(){
