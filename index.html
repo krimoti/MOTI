@@ -638,6 +638,20 @@ body{
   font-weight:600;cursor:pointer;color:var(--gray-700);font-size:0.95rem;
 }
 
+/* Marathon size picker */
+.marathon-opt{
+  background:#fff;border:2px solid var(--gray-200);
+  border-radius:var(--radius);padding:16px 10px;
+  cursor:pointer;text-align:center;transition:all 0.15s;
+}
+.marathon-opt:active{transform:scale(0.96);}
+.marathon-opt.selected{border-color:var(--purple);background:var(--purple-light);}
+.marathon-opt-num{font-size:1.8rem;font-weight:900;color:var(--gray-800);}
+.marathon-opt.selected .marathon-opt-num{color:var(--purple-dark);}
+.marathon-opt-label{font-size:0.8rem;font-weight:700;color:var(--gray-600);margin-top:3px;}
+.marathon-opt-bonus{font-size:0.72rem;color:var(--green);font-weight:700;margin-top:2px;}
+.marathon-opt.selected .marathon-opt-bonus{color:var(--purple);}
+
 /* ---- TOGGLE SWITCH ---- */
 .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .toggle-row-text{flex:1;}
@@ -988,9 +1002,6 @@ body{
     <div id="activationError" style="color:var(--red);font-size:0.85rem;margin-top:12px;display:none;"></div>
     <button class="btn-start" id="activationSubmitBtn" onclick="submitActivation()">בדוק אישור →</button>
     <div class="onboard-tip">לאחר האישור, המכשיר יזכור — לא תידרש שוב, גם ללא אינטרנט</div>
-
-    <!-- ⚠️ TEMPORARY TEST BUTTON — delete this whole <button> before sending to real users -->
-    <button onclick="localStorage.setItem('wup_activated','1');location.reload();" style="margin-top:18px;width:100%;background:#fff3cd;border:1.5px dashed #d4a017;color:#7a5c00;padding:10px;border-radius:var(--radius);font-size:0.78rem;font-weight:700;cursor:pointer;">🧪 דלג על אקטיבציה (בדיקה בלבד — להסיר לפני שליחה ללקוחות)</button>
   </div>
 </div>
 
@@ -1062,6 +1073,9 @@ body{
       <button class="quick-btn" onclick="reviewWrong()">
         <span class="icon">📝</span><span class="qtext">חזרה על שגיאות</span>
       </button>
+      <button class="quick-btn" onclick="startMarathon()" style="background:linear-gradient(135deg,#f5576c,#f093fb);color:#fff;">
+        <span class="icon">🏃</span><span class="qtext" style="color:#fff;">מרתון</span>
+      </button>
     </div>
 
     <div class="section-title">חיפוש</div>
@@ -1118,7 +1132,11 @@ body{
         <div class="lc-stat"><div class="n" id="lcWrong">0</div><div class="l">שגוי</div></div>
         <div class="lc-stat"><div class="n" id="lcScore">0</div><div class="l">נקודות</div></div>
       </div>
+      <div class="lc-stat hidden" id="lcTimerRow" style="text-align:center;margin:8px 0;font-size:0.9rem;color:var(--gray-600);">
+        ⏱️ זמן: <span id="lcTimerDisplay">0:00</span>
+      </div>
       <button class="btn-primary" id="lcNextBtn">המשך ←</button>
+      <button class="btn-secondary" id="lcShareBtn" onclick="shareResults()" style="display:none;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;margin-top:8px;">📤 שתף ב-WhatsApp</button>
       <button class="btn-secondary" onclick="goHome()">חזור לבית</button>
     </div>
   </div>
@@ -1417,6 +1435,47 @@ body{
       <div class="surprise-title" id="surpriseTitle">הפתעה!</div>
       <div class="surprise-desc" id="surpriseDesc"></div>
       <button class="reveal-continue-btn" id="surpriseContinueBtn" onclick="closeSurpriseBox()">מעולה! המשך</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MARATHON SETUP MODAL ===== -->
+<div class="modal-overlay hidden" id="marathonModal">
+  <div class="modal-box" style="max-width:380px;">
+    <div style="font-size:2rem;text-align:center;margin-bottom:6px;">🏃</div>
+    <div class="modal-title" style="text-align:center;">מצב מרתון</div>
+    <div class="modal-sub" style="text-align:center;">בחר כמה שאלות — יותר שאלות, יותר נקודות!</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0;">
+      <button class="marathon-opt" data-q="25" onclick="selectMarathonSize(this)">
+        <div class="marathon-opt-num">25</div>
+        <div class="marathon-opt-label">ספרינט</div>
+        <div class="marathon-opt-bonus">×1 נקודות</div>
+      </button>
+      <button class="marathon-opt selected" data-q="50" onclick="selectMarathonSize(this)">
+        <div class="marathon-opt-num">50</div>
+        <div class="marathon-opt-label">מרתון</div>
+        <div class="marathon-opt-bonus">×1.5 נקודות</div>
+      </button>
+      <button class="marathon-opt" data-q="100" onclick="selectMarathonSize(this)">
+        <div class="marathon-opt-num">100</div>
+        <div class="marathon-opt-label">אולטרה</div>
+        <div class="marathon-opt-bonus">×2 נקודות</div>
+      </button>
+      <button class="marathon-opt" data-q="200" onclick="selectMarathonSize(this)">
+        <div class="marathon-opt-num">200</div>
+        <div class="marathon-opt-label">אגדה</div>
+        <div class="marathon-opt-bonus">×3 נקודות</div>
+      </button>
+    </div>
+
+    <div id="marathonEstimate" style="text-align:center;font-size:0.82rem;color:var(--gray-600);margin-bottom:16px;">
+      ⏱️ זמן משוער: כ-5 דקות
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeMarathonModal()">ביטול</button>
+      <button class="btn-primary" style="flex:1;margin-top:0;" onclick="launchMarathon()">🏃 התחל!</button>
     </div>
   </div>
 </div>
@@ -1734,6 +1793,7 @@ let selectedOnboardGender = 'male';
 let score = parseInt(localStorage.getItem('wup_score')) || 0;
 let learnedWords = JSON.parse(localStorage.getItem('wup_learned')) || [];
 let wrongWords = JSON.parse(localStorage.getItem('wup_wrong')) || [];
+let wordStrength = JSON.parse(localStorage.getItem('wup_strength')) || {}; // SRS: word.en → 0-5
 let totalAnswers = parseInt(localStorage.getItem('wup_total')) || 0;
 let correctAnswers = parseInt(localStorage.getItem('wup_correct')) || 0;
 let streak = parseInt(localStorage.getItem('wup_streak')) || 0;
@@ -1902,7 +1962,8 @@ function checkPronunciationQ(correct,q,heard){
   const micIcon=$('micIcon');
 
   if(correct){
-    score+=12;correctAnswers++;sessionCorrect++;sessionScore+=12;
+    const pts=pointsPerCorrect(12);
+    score+=pts;correctAnswers++;sessionCorrect++;sessionScore+=pts;
     if(q.mode==='word'&&!learnedWords.includes(q.en))learnedWords.push(q.en);
     wrongWords=wrongWords.filter(w=>w.en!==q.en);
     micIcon.textContent='✅';
@@ -1911,6 +1972,7 @@ function checkPronunciationQ(correct,q,heard){
     const praise=PRONUNCIATION_PRAISE[Math.floor(Math.random()*PRONUNCIATION_PRAISE.length)];
     speakEnglishFeedback(praise);
     registerCorrectAnswer();
+    updateWordStrength(q.en,true);
   }else{
     score=Math.max(0,score-3);sessionWrong++;
     if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:q.mode==='sentence'?'sentence':'pronunciation'});
@@ -1919,6 +1981,7 @@ function checkPronunciationQ(correct,q,heard){
     $('micStatus').textContent='לא מדויק — האזן להגייה הנכונה';
     speakEnglishFeedback('This is not correct. You should say: '+q.target);
     registerWrongAnswer();
+    updateWordStrength(q.en,false);
   }
 
   saveState();
@@ -1944,6 +2007,7 @@ function saveState(){
   localStorage.setItem('wup_correct',correctAnswers);
   localStorage.setItem('wup_streak',streak);
   localStorage.setItem('wup_lastdate',lastPlayDate);
+  localStorage.setItem('wup_strength',JSON.stringify(wordStrength));
 }
 
 function accuracy(){
@@ -2193,9 +2257,14 @@ function buildReviewQuestions(words){
 
 function buildQuestions(words){
   const qs=[];
+  // SRS: weight each word — strength 0-1 = 3 extra copies, 2-3 = 1 extra, 4-5 = normal
   words.forEach(w=>{
-    qs.push({type:'en-to-he',question:w.en,correct:w.he,en:w.en,he:w.he});
-    qs.push({type:'he-to-en',question:w.he,correct:w.en,en:w.en,he:w.he});
+    const str=wordStrength[w.en]||0;
+    const copies=str<=1?3:str<=3?2:1;
+    for(let i=0;i<copies;i++){
+      qs.push({type:'en-to-he',question:w.en,correct:w.he,en:w.en,he:w.he});
+      qs.push({type:'he-to-en',question:w.he,correct:w.en,en:w.en,he:w.he});
+    }
   });
   // sprinkle in letter-completion questions for eligible words
   const eligible=words.filter(w=>w.en.replace(/[^a-zA-Z]/g,'').length>=3);
@@ -2263,6 +2332,80 @@ function startQuickPractice(){
   const pool=shuffle([...all]).slice(0,20);
   const fakeLevel={id:-1,name:"תרגול מהיר",emoji:"⚡",words:pool};
   startLevel(fakeLevel);
+}
+
+// ============================================================
+// MARATHON MODE — 50 questions, timer, share results
+// ============================================================
+let marathonSelectedSize=50;
+let marathonPointsMultiplier=1.5;
+
+function pointsPerCorrect(base){
+  const isMarathon=currentLevel&&currentLevel.id===-3;
+  return isMarathon?Math.round(base*marathonPointsMultiplier):base;
+}
+
+const MARATHON_CONFIG={
+  25:{label:'ספרינט',mult:1,  time:'~3 דקות'},
+  50:{label:'מרתון', mult:1.5,time:'~5 דקות'},
+  100:{label:'אולטרה',mult:2, time:'~10 דקות'},
+  200:{label:'אגדה',  mult:3, time:'~20 דקות'}
+};
+
+function startMarathon(){
+  const unlocked=ALL_LEVELS.filter(l=>score>=l.minScore);
+  if(unlocked.length===0){showToast('עדיין אין נושאים פתוחים!');return;}
+  // show setup modal
+  marathonSelectedSize=50;
+  marathonPointsMultiplier=1.5;
+  document.querySelectorAll('.marathon-opt').forEach(b=>{
+    b.classList.toggle('selected',parseInt(b.dataset.q)===50);
+  });
+  $('marathonEstimate').textContent='⏱️ זמן משוער: ~5 דקות';
+  $('marathonModal').classList.remove('hidden');
+}
+
+function selectMarathonSize(btn){
+  document.querySelectorAll('.marathon-opt').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  const q=parseInt(btn.dataset.q);
+  marathonSelectedSize=q;
+  const cfg=MARATHON_CONFIG[q];
+  marathonPointsMultiplier=cfg.mult;
+  $('marathonEstimate').textContent='⏱️ זמן משוער: '+cfg.time;
+}
+
+function closeMarathonModal(){
+  $('marathonModal').classList.add('hidden');
+}
+
+function launchMarathon(){
+  $('marathonModal').classList.add('hidden');
+  const unlocked=ALL_LEVELS.filter(l=>score>=l.minScore);
+  const all=[];
+  unlocked.forEach(l=>l.words.forEach(w=>all.push({...w})));
+  if(all.length<10){showToast('צריך לפחות 10 מילים — פתח עוד נושאים קודם');return;}
+  // build enough words to fill the requested question count
+  // buildQuestions generates ~3x questions per word, so we need fewer words
+  const wordsNeeded=Math.ceil(marathonSelectedSize/3);
+  const pool=shuffle([...all]).slice(0,Math.min(wordsNeeded,all.length));
+  const cfg=MARATHON_CONFIG[marathonSelectedSize];
+  const fakeLevel={id:-3,name:`מרתון ${cfg.label} 🏃`,emoji:'🏃',words:pool};
+  marathonStartTime=Date.now();
+  startLevel(fakeLevel);
+  // override question count: trim to exact requested amount after build
+  currentQuestions=currentQuestions.slice(0,marathonSelectedSize);
+}
+
+function shareResults(){
+  const totalQ=sessionCorrect+sessionWrong;
+  const pct=totalQ>0?Math.round((sessionCorrect/totalQ)*100):0;
+  const elapsed=marathonStartTime?Math.round((Date.now()-marathonStartTime)/1000):0;
+  const mins=Math.floor(elapsed/60), secs=elapsed%60;
+  const timeStr=marathonStartTime?` ב-${mins}:${secs.toString().padStart(2,'0')} דקות`:'';
+  const text=`🏃 WordUp מרתון!\n✅ ${sessionCorrect}/${totalQ} נכון (${pct}%)\n⭐ ${sessionScore} נקודות${timeStr}\nנסה גם אתה!`;
+  const whatsappUrl=`https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(whatsappUrl,'_blank');
 }
 
 function reviewWrong(){
@@ -2441,11 +2584,14 @@ function checkQ(selected,q,btn){
   const pointsDelta=correct?10:-3;
 
   if(correct){
-    score+=10;correctAnswers++;sessionCorrect++;sessionScore+=10;
+    const pts=pointsPerCorrect(10);
+    score+=pts;correctAnswers++;sessionCorrect++;sessionScore+=pts;
     registerCorrectAnswer();
+    updateWordStrength(q.en,true);
   }else{
     score=Math.max(0,score-3);sessionWrong++;
     registerWrongAnswer();
+    updateWordStrength(q.en,false);
   }
   btn.classList.add(correct?'correct':'wrong');
 
@@ -2538,18 +2684,21 @@ function checkTypingQ(typed,q){
   input.disabled=true;
 
   if(correct){
-    score+=12;correctAnswers++;sessionCorrect++;sessionScore+=12;
+    const pts=pointsPerCorrect(12);
+    score+=pts;correctAnswers++;sessionCorrect++;sessionScore+=pts;
     input.classList.add('correct');
     if(!learnedWords.includes(q.en))learnedWords.push(q.en);
     wrongWords=wrongWords.filter(w=>w.en!==q.en);
     speak(q.correct,'en');
     registerCorrectAnswer();
+    updateWordStrength(q.en,true);
   }else{
     score=Math.max(0,score-3);sessionWrong++;
     input.classList.add('wrong');
     input.value=q.correct;
     if(!wrongWords.find(w=>w.en===q.en))wrongWords.push({en:q.en,he:q.he,type:'typing'});
     registerWrongAnswer();
+    updateWordStrength(q.en,false);
   }
 
   if(revealEnabled){
@@ -2577,6 +2726,11 @@ function showLevelComplete(){
   $('levelComplete').classList.remove('hidden');
   const pct=sessionCorrect+sessionWrong>0?Math.round((sessionCorrect/(sessionCorrect+sessionWrong))*100):0;
   let emoji='🎉',title='כל הכבוד!',sub='';
+  const isMarathon=currentLevel.id===-3;
+
+  // hide share/timer by default
+  $('lcShareBtn').style.display='none';
+  $('lcTimerRow').classList.add('hidden');
 
   if(isReviewSession){
     const remaining=wrongWords.filter(w=>w.type!=='sentence').length;
@@ -2602,6 +2756,30 @@ function showLevelComplete(){
     return;
   }
 
+  if(isMarathon){
+    // show timer
+    if(marathonStartTime){
+      const elapsed=Math.round((Date.now()-marathonStartTime)/1000);
+      const mins=Math.floor(elapsed/60),secs=elapsed%60;
+      $('lcTimerDisplay').textContent=mins+':'+secs.toString().padStart(2,'0');
+      $('lcTimerRow').classList.remove('hidden');
+    }
+    $('lcShareBtn').style.display='block';
+    if(pct>=90){emoji='🏆';title='מרתון מושלם!';sub='ביצועים עילאיים!';}
+    else if(pct>=70){emoji='🏅';title='מרתון מצוין!';sub='כל הכבוד על הסיבולת!';}
+    else{emoji='💪';title='סיימת מרתון!';sub='עוד אימון ותהיה אלוף!';}
+    $('lcEmoji').textContent=emoji;
+    $('lcTitle').textContent=title;
+    $('lcSub').textContent=sub;
+    $('lcCorrect').textContent=sessionCorrect;
+    $('lcWrong').textContent=sessionWrong;
+    $('lcScore').textContent='+'+sessionScore;
+    const nextBtn=$('lcNextBtn');
+    nextBtn.textContent='מרתון שוב 🏃';
+    nextBtn.onclick=startMarathon;
+    return;
+  }
+
   if(pct>=90){emoji='🏆';title='מושלם!';sub='ביצועים מדהימים!';}
   else if(pct>=70){emoji='🎉';title='יפה מאוד!';sub='המשך כך!';}
   else{emoji='💪';title='לא רע!';sub='עוד תרגול ויצליח!';}
@@ -2621,6 +2799,8 @@ function showLevelComplete(){
     nextBtn.textContent='חזור לנושאים';
     nextBtn.onclick=goHome;
   }
+  // show share button for all modes with decent score
+  if(pct>=60){$('lcShareBtn').style.display='block';}
 }
 
 // ============================================================
@@ -2918,6 +3098,13 @@ function rollNextSurpriseThreshold(){
   nextSurpriseAt=5+Math.floor(Math.random()*8);
 }
 
+function updateWordStrength(en,correct){
+  if(!en)return;
+  const cur=wordStrength[en]||0;
+  if(correct){wordStrength[en]=Math.min(5,cur+1);}
+  else{wordStrength[en]=0;}
+}
+
 function registerCorrectAnswer(){
   correctStreak++;
   if(nextSurpriseAt===0)rollNextSurpriseThreshold();
@@ -3134,7 +3321,7 @@ function closeInstallInstructions(){
 // (no server of your own — runs free under your Google account)
 // ============================================================
 // PASTE YOUR DEPLOYED APPS SCRIPT WEB APP URL HERE:
-const ACTIVATION_API_URL='PASTE_YOUR_APPS_SCRIPT_URL_HERE';
+const ACTIVATION_API_URL='https://script.google.com/macros/s/AKfycbxmiLhidE_1hFmRX_hRieh3VVHwuupQATMZY48CyT2Nn_0g5OZLXkA7M1KWfTmqy2UA9w/exec';
 // Price shown to the user on the activation screen — change anytime:
 const ACTIVATION_PRICE_TEXT='25 ₪ לרכישה חד-פעמית';
 
@@ -3651,6 +3838,7 @@ function adminImport(file){
 function adminResetProgress(){
   if(!confirm('⚠️ זה יאפס את כל ההתקדמות. להמשיך?'))return;
   score=0;learnedWords=[];wrongWords=[];totalAnswers=0;correctAnswers=0;streak=0;lastPlayDate='';
+  wordStrength={};
   saveState();updateBadges();showToast('✅ ההתקדמות אופסה');openAdminScreen();
 }
 
