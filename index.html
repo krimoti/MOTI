@@ -1040,6 +1040,15 @@ body{
         <div class="prog-box"><div class="num" id="statAccuracy">0%</div><div class="lbl">דיוק</div></div>
         <div class="prog-box"><div class="num" id="statDays">0</div><div class="lbl">ימים רצופים</div></div>
       </div>
+      <div id="milestoneBar" style="margin-top:14px;background:rgba(255,255,255,0.12);border-radius:12px;padding:10px 14px;display:none;">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;opacity:0.85;margin-bottom:6px;">
+          <span id="milestoneLabel">🎯 יעד הבא</span>
+          <span id="milestoneCount"></span>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;">
+          <div id="milestoneFill" style="height:100%;background:#FFD93D;border-radius:3px;transition:width 0.6s;"></div>
+        </div>
+      </div>
     </div>
 
     <div class="install-banner hidden" id="updateBanner" style="background:linear-gradient(135deg,#1a3a2a,#0f2417);border-radius:16px;margin:14px 16px 0;">
@@ -1072,6 +1081,9 @@ body{
       </button>
       <button class="quick-btn" onclick="reviewWrong()">
         <span class="icon">📝</span><span class="qtext">חזרה על שגיאות</span>
+      </button>
+      <button class="quick-btn" onclick="showLeaderboard()" style="background:linear-gradient(135deg,#1e1b3a,#3a1f5c);color:#fff;">
+        <span class="icon">🏆</span><span class="qtext" style="color:#fff;">לוח מובילים</span>
       </button>
       <button class="quick-btn" onclick="startMarathon()" style="background:linear-gradient(135deg,#f5576c,#f093fb);color:#fff;">
         <span class="icon">🏃</span><span class="qtext" style="color:#fff;">מרתון</span>
@@ -1138,6 +1150,31 @@ body{
       <button class="btn-primary" id="lcNextBtn">המשך ←</button>
       <button class="btn-secondary" id="lcShareBtn" onclick="shareResults()" style="display:none;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;margin-top:8px;">📤 שתף ב-WhatsApp</button>
       <button class="btn-secondary" onclick="goHome()">חזור לבית</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LEADERBOARD SCREEN ===== -->
+<div class="screen" id="leaderboardScreen">
+  <div class="app-header">
+    <button class="header-back" onclick="goHome()">←</button>
+    <div class="header-title">🏆 לוח מובילים</div>
+    <button onclick="shareLeaderboard()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;border:none;padding:6px 14px;border-radius:20px;font-weight:700;font-size:0.8rem;cursor:pointer;">📤 שתף</button>
+  </div>
+  <div style="overflow-y:auto;flex:1;padding:16px;" id="leaderboardContent">
+    <div style="background:linear-gradient(135deg,#1e1b3a,#3a1f5c);border-radius:20px;padding:20px;margin-bottom:16px;text-align:center;color:#fff;">
+      <div style="font-size:0.8rem;opacity:0.7;margin-bottom:4px;">הניקוד השבועי שלי</div>
+      <div style="font-size:2.5rem;font-weight:900;color:#FFD93D;" id="myWeeklyScore">0</div>
+      <div style="font-size:0.8rem;opacity:0.7;margin-top:4px;" id="weekRangeLabel"></div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);">
+      <div style="font-weight:700;font-size:0.9rem;color:var(--gray-800);margin-bottom:14px;">📊 הישגים השבוע</div>
+      <div id="leaderboardStats"></div>
+    </div>
+    <div style="margin-top:14px;background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);">
+      <div style="font-weight:700;font-size:0.9rem;color:var(--gray-800);margin-bottom:4px;">📅 יעד השבוע</div>
+      <div style="font-size:0.8rem;color:var(--gray-600);margin-bottom:12px;">תרגל כל יום השבוע לקבלת תואר מיוחד</div>
+      <div style="display:flex;gap:8px;justify-content:center;" id="weekDots"></div>
     </div>
   </div>
 </div>
@@ -2026,10 +2063,37 @@ function updateStreak(){
   const today=new Date().toDateString();
   if(lastPlayDate===today)return;
   const yesterday=new Date(Date.now()-86400000).toDateString();
-  if(lastPlayDate===yesterday){streak++;}
-  else{streak=1;}
+  if(lastPlayDate===yesterday){
+    streak++;
+    checkMilestoneReached();
+  }else if(lastPlayDate&&lastPlayDate!==today){
+    // streak broken — show drama
+    const oldStreak=streak;
+    streak=1;
+    if(oldStreak>=3){
+      setTimeout(()=>showStreakBroken(oldStreak),1200);
+    }
+  }else{
+    streak=1;
+  }
   lastPlayDate=today;
   saveState();
+}
+
+function showStreakBroken(oldStreak){
+  const overlay=document.createElement('div');
+  overlay.className='reveal-overlay show';
+  overlay.style.zIndex='9997';
+  overlay.innerHTML=`
+    <div class="reveal-card" style="background:linear-gradient(160deg,#2d0a0a,#1a0000);">
+      <div class="reveal-glow" style="background:radial-gradient(circle,rgba(239,68,68,0.25),transparent 70%);"></div>
+      <div style="font-size:3rem;margin-bottom:8px;">💔</div>
+      <div style="font-size:1.4rem;font-weight:900;color:#fff;margin-bottom:8px;">הרצף נשבר!</div>
+      <div style="font-size:0.95rem;color:rgba(255,255,255,0.75);margin-bottom:6px;">${oldStreak} ימים רצופים — נעלמו</div>
+      <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:20px;">תרגל היום כדי להתחיל מחדש 💪</div>
+      <button class="reveal-continue-btn" onclick="this.closest('.reveal-overlay').remove()">אוקיי, מתחיל מחדש!</button>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 // ============================================================
@@ -2158,6 +2222,175 @@ function updateBadges(){
   $('statLearned').textContent=learnedWords.length;
   $('statAccuracy').textContent=accuracy()+'%';
   $('statDays').textContent=streak;
+  updateMilestoneBar();
+  updateWeeklyScore();
+}
+
+// ============================================================
+// MILESTONES — streak goals with prize descriptions
+// ============================================================
+const MILESTONES=[
+  {days:3, label:'3 ימים רצופים',prize:'🎁 פרס ראשון — שתף עם המנהל!'},
+  {days:7, label:'שבוע שלם!',prize:'🌟 שבוע מלא — מגיע לך פרס!'},
+  {days:14,label:'שבועיים רצופים',prize:'💎 שבועיים — אלוף/ת אמיתי/ת!'},
+  {days:30,label:'חודש שלם!',prize:'👑 חודש רצוף — הישג נדיר ביותר!'},
+  {days:60,label:'חודשיים!',prize:'🏆 שני חודשים — אגדה!'},
+];
+
+function updateMilestoneBar(){
+  const bar=$('milestoneBar');
+  if(!bar)return;
+  const next=MILESTONES.find(m=>streak<m.days);
+  if(!next){bar.style.display='none';return;}
+  const prev=MILESTONES.find(m=>m.days<next.days&&streak<m.days);
+  const from=prev?prev.days:0;
+  const pct=Math.round(((streak-from)/(next.days-from))*100);
+  bar.style.display='block';
+  $('milestoneLabel').textContent='🎯 '+next.label+' ('+next.prize+')';
+  $('milestoneCount').textContent=streak+'/'+next.days+' ימים';
+  $('milestoneFill').style.width=pct+'%';
+}
+
+function checkMilestoneReached(){
+  const hit=MILESTONES.find(m=>m.days===streak);
+  if(!hit)return;
+  // show a special reveal card
+  const overlay=document.createElement('div');
+  overlay.className='reveal-overlay show';
+  overlay.style.zIndex='9997';
+  overlay.innerHTML=`
+    <div class="reveal-card" style="background:linear-gradient(160deg,#1e1b3a,#3a1f5c);">
+      <div class="reveal-glow"></div>
+      <div style="font-size:3rem;margin-bottom:8px;animation:mascotBounce 0.7s cubic-bezier(.17,.89,.32,1.49);">🎉</div>
+      <div style="font-size:1.5rem;font-weight:900;color:#FFD93D;margin-bottom:8px;">${hit.label}</div>
+      <div style="font-size:1rem;color:rgba(255,255,255,0.85);margin-bottom:6px;">${hit.prize}</div>
+      <div style="font-size:0.82rem;color:rgba(255,255,255,0.55);margin-bottom:20px;">צלם מסך ושלח למנהל לקבלת הפרס!</div>
+      <button class="reveal-continue-btn" onclick="this.closest('.reveal-overlay').remove()">מגניב! 🙌</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  vibrate([30,50,30,50,80]);
+}
+
+// ============================================================
+// WEEKLY SCORE — track this week's earned points
+// ============================================================
+function getWeekKey(){
+  const now=new Date();
+  const day=now.getDay();
+  const monday=new Date(now);
+  monday.setDate(now.getDate()-(day===0?6:day-1));
+  return monday.toISOString().slice(0,10);
+}
+
+function updateWeeklyScore(){
+  const wk=getWeekKey();
+  let weekly=JSON.parse(localStorage.getItem('wup_weekly')||'{}');
+  // initialize if new week
+  if(weekly.week!==wk)weekly={week:wk,score:0,daysPlayed:[]};
+  // mark today as played
+  const today=new Date().toDateString();
+  if(!weekly.daysPlayed.includes(today))weekly.daysPlayed.push(today);
+  localStorage.setItem('wup_weekly',JSON.stringify(weekly));
+}
+
+function addWeeklyPoints(pts){
+  const wk=getWeekKey();
+  let weekly=JSON.parse(localStorage.getItem('wup_weekly')||'{}');
+  if(weekly.week!==wk)weekly={week:wk,score:0,daysPlayed:[]};
+  weekly.score=(weekly.score||0)+pts;
+  const today=new Date().toDateString();
+  if(!weekly.daysPlayed.includes(today))weekly.daysPlayed.push(today);
+  localStorage.setItem('wup_weekly',JSON.stringify(weekly));
+}
+
+// ============================================================
+// LEADERBOARD SCREEN
+// ============================================================
+function showLeaderboard(){
+  const wk=getWeekKey();
+  const weekly=JSON.parse(localStorage.getItem('wup_weekly')||'{}');
+  const weekScore=weekly.week===wk?(weekly.score||0):0;
+  const daysPlayed=weekly.week===wk?(weekly.daysPlayed||[]):[];
+
+  // week range label
+  const monday=new Date(wk);
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
+  const fmt=d=>d.toLocaleDateString('he-IL',{day:'numeric',month:'numeric'});
+  $('weekRangeLabel').textContent=`שבוע ${fmt(monday)} – ${fmt(sunday)}`;
+  $('myWeeklyScore').textContent=weekScore;
+
+  // stats block
+  $('leaderboardStats').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:1.6rem;font-weight:800;color:var(--purple);">${streak}</div>
+        <div style="font-size:0.72rem;color:var(--gray-600);">ימים רצופים</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:1.6rem;font-weight:800;color:var(--purple);">${learnedWords.length}</div>
+        <div style="font-size:0.72rem;color:var(--gray-600);">מילים שנלמדו</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:1.6rem;font-weight:800;color:var(--purple);">${accuracy()}%</div>
+        <div style="font-size:0.72rem;color:var(--gray-600);">דיוק כולל</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:1.6rem;font-weight:800;color:var(--purple);">${daysPlayed.length}/7</div>
+        <div style="font-size:0.72rem;color:var(--gray-600);">ימים פעילים השבוע</div>
+      </div>
+    </div>`;
+
+  // week dots — 7 days Mon–Sun
+  const dots=$('weekDots');
+  dots.innerHTML='';
+  const dayNames=['ב','ג','ד','ה','ו','ש','א'];
+  for(let i=0;i<7;i++){
+    const d=new Date(monday);d.setDate(monday.getDate()+i);
+    const played=daysPlayed.includes(d.toDateString());
+    const isToday=d.toDateString()===new Date().toDateString();
+    const dot=document.createElement('div');
+    dot.style.cssText=`
+      width:36px;height:36px;border-radius:50%;
+      background:${played?'var(--purple)':'var(--gray-200)'};
+      color:${played?'#fff':'var(--gray-600)'};
+      display:flex;align-items:center;justify-content:center;
+      font-size:0.72rem;font-weight:700;
+      ${isToday?'box-shadow:0 0 0 2px var(--purple),0 0 0 4px var(--purple-light);':''}
+    `;
+    dot.textContent=played?'✓':dayNames[i];
+    dots.appendChild(dot);
+  }
+
+  // next milestone
+  const next=MILESTONES.find(m=>streak<m.days);
+  const milestoneEl=document.createElement('div');
+  if(next){
+    milestoneEl.style.cssText='margin-top:14px;background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);';
+    milestoneEl.innerHTML=`
+      <div style="font-weight:700;font-size:0.9rem;color:var(--gray-800);margin-bottom:6px;">🎯 יעד הבא: ${next.label}</div>
+      <div style="font-size:0.82rem;color:var(--gray-600);">${next.prize}</div>
+      <div style="font-size:0.78rem;color:var(--purple);margin-top:6px;font-weight:700;">${next.days-streak} ימים נוספים</div>`;
+    $('leaderboardContent').appendChild(milestoneEl);
+  }
+
+  showScreen('leaderboardScreen');
+}
+
+function shareLeaderboard(){
+  const wk=getWeekKey();
+  const weekly=JSON.parse(localStorage.getItem('wup_weekly')||'{}');
+  const weekScore=weekly.week===wk?(weekly.score||0):0;
+  const days=weekly.week===wk?(weekly.daysPlayed||[]).length:0;
+  const next=MILESTONES.find(m=>streak<m.days);
+  const text=
+    `🏆 WordUp — הישגי השבוע שלי!\n`+
+    `⭐ ${weekScore} נקודות השבוע\n`+
+    `🔥 ${streak} ימים רצופים\n`+
+    `📚 ${learnedWords.length} מילים שנלמדו\n`+
+    `📅 פעיל ${days}/7 ימים השבוע\n`+
+    (next?`🎯 יעד הבא: ${next.label}\n`:'')+
+    `\nנסה גם אתה!`;
+  window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank');
 }
 
 function renderHome(filter=''){
@@ -2342,7 +2575,9 @@ let marathonPointsMultiplier=1.5;
 
 function pointsPerCorrect(base){
   const isMarathon=currentLevel&&currentLevel.id===-3;
-  return isMarathon?Math.round(base*marathonPointsMultiplier):base;
+  const pts=isMarathon?Math.round(base*marathonPointsMultiplier):base;
+  addWeeklyPoints(pts);
+  return pts;
 }
 
 const MARATHON_CONFIG={
